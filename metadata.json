@@ -1,5 +1,5 @@
 {
-  "name": "KingdomKids Curriculum",
+  "name": "KK Planner",
   "description": "A modern, minimal portal for teachers to access lesson content, activities, and track progress, with an integrated admin CMS and AI-powered lesson assistants.",
   "requestFramePermissions": [
     "camera",

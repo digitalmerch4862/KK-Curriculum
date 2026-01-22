@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { supabase } from '../services/supabaseMock';
+import { db } from '../services/supabaseService';
 import { Lesson, UserRole, Profile } from '../types';
 
 interface TeacherDashboardProps {
@@ -17,8 +17,12 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
   useEffect(() => {
     const fetch = async () => {
       setLoading(true);
-      const data = await supabase.lessons.list(UserRole.TEACHER);
-      setLessons(data);
+      try {
+        const data = await db.lessons.list(UserRole.TEACHER);
+        setLessons(data);
+      } catch (e) {
+        console.error("Failed to fetch lessons", e);
+      }
       setLoading(false);
     };
     fetch();
@@ -26,7 +30,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
 
   const filteredLessons = lessons.filter(l => {
     const matchesSearch = l.title.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                          l.tags.some(t => t.toLowerCase().includes(searchTerm.toLowerCase()));
+                          l.tags?.some(t => t.toLowerCase().includes(searchTerm.toLowerCase()));
     const matchesCat = categoryFilter === 'All' || l.category === categoryFilter;
     return matchesSearch && matchesCat;
   });
@@ -35,7 +39,6 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
 
   return (
     <div className="min-h-screen bg-white">
-      {/* Sticky Header */}
       <header className="sticky top-0 z-40 bg-white border-b border-gray-100 px-6 py-4 flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-black">Hello, {user.name} 👋</h1>
@@ -61,7 +64,6 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
       </header>
 
       <div className="max-w-7xl mx-auto px-6 py-8 flex flex-col md:flex-row gap-10">
-        {/* Sidebar Filters */}
         <aside className="w-full md:w-64 shrink-0 space-y-8">
           <div>
             <h3 className="text-sm font-bold uppercase tracking-wider text-gray-400 mb-4">Categories</h3>
@@ -81,7 +83,6 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
           </div>
         </aside>
 
-        {/* Main Grid */}
         <main className="flex-1">
           {loading ? (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 animate-pulse">
@@ -96,7 +97,6 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
                   className="group bg-white border border-gray-100 rounded-3xl p-6 shadow-sm hover:shadow-xl hover:scale-[1.02] transition-all cursor-pointer relative overflow-hidden"
                 >
                   <div className="absolute top-0 right-0 w-24 h-24 bg-pink-50 rounded-bl-full -mr-12 -mt-12 transition-transform group-hover:scale-150"></div>
-                  
                   <div className="relative z-10">
                     <span className="inline-block bg-gray-50 text-gray-500 text-[10px] font-bold uppercase tracking-widest px-2 py-1 rounded-md mb-3">
                       {lesson.category}
@@ -107,7 +107,6 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
                     <p className="text-sm text-gray-500 mb-6 line-clamp-2 leading-relaxed">
                       {lesson.summary}
                     </p>
-                    
                     <div className="flex items-center justify-between mt-auto">
                       <div className="text-xs font-bold text-gray-300">
                         GRADE {lesson.grade_min}-{lesson.grade_max}

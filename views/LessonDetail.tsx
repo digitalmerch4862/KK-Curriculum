@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { supabase } from '../services/supabaseMock';
+import { db } from '../services/supabaseService';
 import { Lesson, UserRole, Profile } from '../types';
 import ActivityCard from '../components/ActivityCard';
 import VideoEmbed from '../components/VideoEmbed';
@@ -19,20 +19,36 @@ const LessonDetail: React.FC<LessonDetailProps> = ({ lessonId, user, onBack }) =
 
   useEffect(() => {
     const fetch = async () => {
-      const data = await supabase.lessons.get(lessonId);
-      setLesson(data);
-      
-      const prog = await supabase.progress.get(lessonId, user.id);
-      setCompleted(prog?.completed || false);
-      
+      try {
+        const data = await db.lessons.get(lessonId);
+        setLesson(data);
+        
+        const prog = await db.progress.get(lessonId, user.id);
+        setCompleted(prog?.completed || false);
+      } catch (e) {
+        console.error(e);
+      }
       setLoading(false);
     };
     fetch();
   }, [lessonId, user.id]);
 
   const toggleComplete = async () => {
-    await supabase.progress.toggle(lessonId, user.id);
-    setCompleted(!completed);
+    try {
+      await db.progress.toggle(lessonId, user.id);
+      setCompleted(!completed);
+    } catch (e) {
+      alert("Error updating progress");
+    }
+  };
+
+  const handleDownload = async (path: string) => {
+    try {
+      const url = await db.storage.getSignedUrl(path);
+      window.open(url, '_blank');
+    } catch (e) {
+      alert("Error getting download link");
+    }
   };
 
   if (loading) return <div className="p-10 text-center">Loading Lesson...</div>;
@@ -40,7 +56,6 @@ const LessonDetail: React.FC<LessonDetailProps> = ({ lessonId, user, onBack }) =
 
   return (
     <div className="min-h-screen bg-white">
-      {/* Sticky Reader Header */}
       <header className="sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b border-gray-100 px-6 py-4 flex items-center justify-between">
         <button onClick={onBack} className="p-2 hover:bg-gray-100 rounded-full transition-colors">
           <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -66,7 +81,6 @@ const LessonDetail: React.FC<LessonDetailProps> = ({ lessonId, user, onBack }) =
       </header>
 
       <main className="max-w-4xl mx-auto px-6 py-12">
-        {/* Tab Navigation */}
         <div className="flex border-b border-gray-100 mb-10 overflow-x-auto whitespace-nowrap scrollbar-hide">
           {(['overview', 'text', 'activities', 'media'] as const).map(tab => (
             <button
@@ -81,7 +95,6 @@ const LessonDetail: React.FC<LessonDetailProps> = ({ lessonId, user, onBack }) =
           ))}
         </div>
 
-        {/* Tab Content */}
         <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
           {activeTab === 'overview' && (
             <div className="space-y-10">
@@ -95,19 +108,10 @@ const LessonDetail: React.FC<LessonDetailProps> = ({ lessonId, user, onBack }) =
                   {lesson.summary}
                 </p>
               </section>
-              
               <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                 <div className="bg-pink-50 p-6 rounded-3xl">
                   <h3 className="font-bold text-pink-600 mb-2 uppercase text-xs tracking-widest">Key Learning</h3>
                   <p className="text-gray-700">Explore the main themes of this week's story through guided reading and creative crafts.</p>
-                </div>
-                <div className="bg-gray-50 p-6 rounded-3xl">
-                  <h3 className="font-bold text-gray-600 mb-2 uppercase text-xs tracking-widest">At a Glance</h3>
-                  <ul className="text-sm space-y-1 text-gray-500">
-                    <li>⏱️ 45-60 minutes total</li>
-                    <li>🎨 1 Hands-on activity</li>
-                    <li>📺 1 Video summary</li>
-                  </ul>
                 </div>
               </div>
             </div>
@@ -153,7 +157,6 @@ const LessonDetail: React.FC<LessonDetailProps> = ({ lessonId, user, onBack }) =
                   )}
                 </div>
               </section>
-
               <section>
                 <h3 className="text-xl font-bold mb-6 flex items-center gap-2">
                   <span className="w-1.5 h-6 bg-gray-900 rounded-full"></span>
@@ -162,12 +165,10 @@ const LessonDetail: React.FC<LessonDetailProps> = ({ lessonId, user, onBack }) =
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {lesson.attachments?.length ? (
                     lesson.attachments.map(att => (
-                      <a 
+                      <button 
                         key={att.id}
-                        href={supabase.storage.getPublicUrl(att.storage_path)}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="p-4 bg-white border border-gray-100 rounded-2xl flex items-center gap-4 hover:border-pink-500 transition-colors shadow-sm"
+                        onClick={() => handleDownload(att.storage_path)}
+                        className="p-4 bg-white border border-gray-100 rounded-2xl flex items-center gap-4 hover:border-pink-500 transition-colors shadow-sm text-left w-full"
                       >
                         <div className="w-10 h-10 bg-gray-50 rounded-xl flex items-center justify-center text-gray-400">
                            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -178,7 +179,7 @@ const LessonDetail: React.FC<LessonDetailProps> = ({ lessonId, user, onBack }) =
                           <p className="font-bold text-sm truncate">{att.name}</p>
                           <p className="text-[10px] text-gray-400 uppercase font-bold">{att.type}</p>
                         </div>
-                      </a>
+                      </button>
                     ))
                   ) : (
                     <p className="col-span-full text-gray-400 italic">No downloadable files attached.</p>
