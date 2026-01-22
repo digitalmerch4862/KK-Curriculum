@@ -1,8 +1,19 @@
 
 import { GoogleGenAI, Type } from "@google/genai";
 
+/**
+ * Helper to get the API key safely.
+ */
+const getApiKey = () => {
+  if (typeof process !== 'undefined' && process.env && process.env.API_KEY) {
+    return process.env.API_KEY;
+  }
+  return '';
+};
+
 export const generateLessonSummary = async (content: string) => {
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const apiKey = getApiKey();
+  const ai = new GoogleGenAI({ apiKey });
   const response = await ai.models.generateContent({
     model: 'gemini-3-flash-preview',
     contents: `Summarize the following lesson content into 2-3 engaging sentences for teachers. Content: ${content}`,
@@ -11,7 +22,8 @@ export const generateLessonSummary = async (content: string) => {
 };
 
 export const generateDiscussionQuestions = async (content: string, gradeRange: string) => {
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const apiKey = getApiKey();
+  const ai = new GoogleGenAI({ apiKey });
   const response = await ai.models.generateContent({
     model: 'gemini-3-flash-preview',
     contents: `Generate 5 age-appropriate discussion questions for children in grades ${gradeRange} based on this lesson content: ${content}`,
@@ -20,7 +32,8 @@ export const generateDiscussionQuestions = async (content: string, gradeRange: s
 };
 
 export const generateActivitiesDraft = async (content: string, gradeRange: string) => {
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const apiKey = getApiKey();
+  const ai = new GoogleGenAI({ apiKey });
   const response = await ai.models.generateContent({
     model: 'gemini-3-flash-preview',
     contents: `Create 2 creative hands-on activities based on this lesson for children in grades ${gradeRange}. Return as a JSON list.`,
