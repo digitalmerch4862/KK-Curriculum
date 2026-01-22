@@ -1,6 +1,5 @@
-
 import React from 'react';
-import { LessonActivity } from '../types';
+import { LessonActivity } from '../types.ts';
 
 interface ActivityCardProps {
   activity: LessonActivity;

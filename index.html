@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="en">
   <head>
@@ -14,14 +13,14 @@
         font-family: 'Inter', sans-serif;
         background-color: #ffffff;
         color: #000000;
+        margin: 0;
       }
       .pink-accent { color: #ec4899; }
       .bg-pink-accent { background-color: #ec4899; }
       .border-pink-accent { border-color: #ec4899; }
     </style>
     <script>
-      // Shim process.env for browser environments where it might be missing
-      // to prevent "process is not defined" errors during module evaluation.
+      // Shim process.env for browser environments
       window.process = window.process || { env: {} };
     </script>
     <script type="importmap">
@@ -41,7 +40,6 @@
   </head>
   <body>
     <div id="root"></div>
-    <!-- Explicitly load the entry point -->
     <script type="module" src="index.tsx"></script>
   </body>
 </html>

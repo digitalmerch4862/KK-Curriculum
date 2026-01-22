@@ -1,7 +1,6 @@
-
 import React, { useState, useEffect } from 'react';
-import { db } from '../services/supabaseService';
-import { Lesson, UserRole, Profile } from '../types';
+import { db } from '../services/supabaseService.ts';
+import { Lesson, UserRole, Profile } from '../types.ts';
 
 interface TeacherDashboardProps {
   user: Profile;

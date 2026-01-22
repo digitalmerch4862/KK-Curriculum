@@ -1,8 +1,7 @@
-
 import React, { useState, useEffect } from 'react';
-import { db } from '../services/supabaseService';
-import { Lesson, LessonStatus, UserRole, Profile, LessonActivity, LessonVideo, Attachment } from '../types';
-import { generateLessonSummary, generateActivitiesDraft, generateDiscussionQuestions } from '../services/geminiService';
+import { db } from '../services/supabaseService.ts';
+import { Lesson, LessonStatus, UserRole, Profile, LessonActivity, LessonVideo, Attachment } from '../types.ts';
+import { generateLessonSummary, generateActivitiesDraft, generateDiscussionQuestions } from '../services/geminiService.ts';
 
 interface AdminDashboardProps {
   user: Profile;

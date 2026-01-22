@@ -1,6 +1,5 @@
-
-import { supabase } from '../lib/supabaseClient';
-import { UserRole, LessonStatus, Lesson, LessonActivity, LessonVideo, Attachment, LessonProgress } from '../types';
+import { supabase } from '../lib/supabaseClient.ts';
+import { UserRole, LessonStatus, Lesson, LessonActivity, LessonVideo, Attachment, LessonProgress } from '../types.ts';
 
 const handleSupabaseError = (error: any, context: string) => {
   console.error(`Supabase Error [${context}]:`, error);
@@ -46,9 +45,8 @@ export const db = {
       activities?: Partial<LessonActivity>[], 
       videos?: Partial<LessonVideo>[]
     ) {
-      // Ensure we don't try to insert undefined id for new lessons
       const { id, ...lessonPayload } = lesson;
-      const payload = id ? { id, ...lessonPayload } : lessonPayload;
+      const payload = id && id !== 'new' ? { id, ...lessonPayload } : lessonPayload;
 
       const { data: lessonData, error: lError } = await supabase
         .from('lessons')
@@ -62,7 +60,6 @@ export const db = {
       if (lError) handleSupabaseError(lError, 'saving lesson');
 
       if (activities && lessonData) {
-        // Clear existing activities and insert fresh ones to maintain order and sync
         await supabase.from('lesson_activities').delete().eq('lesson_id', lessonData.id);
         if (activities.length > 0) {
           const activitiesToInsert = activities.map((a, i) => {
@@ -79,7 +76,6 @@ export const db = {
       }
 
       if (videos && lessonData) {
-        // Clear existing video links and re-insert
         await supabase.from('lesson_videos').delete().eq('lesson_id', lessonData.id);
         if (videos.length > 0) {
           const videosToInsert = videos.map((v, i) => {
@@ -115,12 +111,9 @@ export const db = {
       return data;
     },
     async remove(id: string, storagePath: string) {
-      // 1. Remove from storage
       const { error: sError } = await supabase.storage.from('lesson-assets').remove([storagePath]);
-      // Note: We continue even if storage removal fails to keep DB clean, but we log it
-      if (sError) console.warn("Storage removal failed, proceeding with DB record deletion", sError);
+      if (sError) console.warn("Storage removal failed", sError);
       
-      // 2. Remove from DB
       const { error: dError } = await supabase.from('attachments').delete().eq('id', id);
       if (dError) handleSupabaseError(dError, 'removing attachment record');
     }
@@ -167,7 +160,6 @@ export const db = {
   storage: {
     async upload(file: File) {
       const fileExt = file.name.split('.').pop();
-      // Generate a unique path to avoid collisions
       const fileName = `${Math.random().toString(36).substring(2)}-${Date.now()}.${fileExt}`;
       const { data, error } = await supabase.storage
         .from('lesson-assets')

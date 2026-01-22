@@ -1,9 +1,8 @@
-
 import React, { useState, useEffect } from 'react';
-import { db } from '../services/supabaseService';
-import { Lesson, UserRole, Profile } from '../types';
-import ActivityCard from '../components/ActivityCard';
-import VideoEmbed from '../components/VideoEmbed';
+import { db } from '../services/supabaseService.ts';
+import { Lesson, Profile } from '../types.ts';
+import ActivityCard from '../components/ActivityCard.tsx';
+import VideoEmbed from '../components/VideoEmbed.tsx';
 
 interface LessonDetailProps {
   lessonId: string;
@@ -108,12 +107,6 @@ const LessonDetail: React.FC<LessonDetailProps> = ({ lessonId, user, onBack }) =
                   {lesson.summary}
                 </p>
               </section>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                <div className="bg-pink-50 p-6 rounded-3xl">
-                  <h3 className="font-bold text-pink-600 mb-2 uppercase text-xs tracking-widest">Key Learning</h3>
-                  <p className="text-gray-700">Explore the main themes of this week's story through guided reading and creative crafts.</p>
-                </div>
-              </div>
             </div>
           )}
 
@@ -170,11 +163,6 @@ const LessonDetail: React.FC<LessonDetailProps> = ({ lessonId, user, onBack }) =
                         onClick={() => handleDownload(att.storage_path)}
                         className="p-4 bg-white border border-gray-100 rounded-2xl flex items-center gap-4 hover:border-pink-500 transition-colors shadow-sm text-left w-full"
                       >
-                        <div className="w-10 h-10 bg-gray-50 rounded-xl flex items-center justify-center text-gray-400">
-                           <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
-                          </svg>
-                        </div>
                         <div className="flex-1 min-w-0">
                           <p className="font-bold text-sm truncate">{att.name}</p>
                           <p className="text-[10px] text-gray-400 uppercase font-bold">{att.type}</p>

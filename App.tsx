@@ -1,10 +1,9 @@
-
-import React, { useState, useEffect, useCallback } from 'react';
-import { UserRole, AuthUser, Profile } from './types';
-import Login from './views/Login';
-import TeacherDashboard from './views/TeacherDashboard';
-import AdminDashboard from './views/AdminDashboard';
-import LessonDetail from './views/LessonDetail';
+import React, { useState, useEffect } from 'react';
+import { UserRole, AuthUser, Profile } from './types.ts';
+import Login from './views/Login.tsx';
+import TeacherDashboard from './views/TeacherDashboard.tsx';
+import AdminDashboard from './views/AdminDashboard.tsx';
+import LessonDetail from './views/LessonDetail.tsx';
 
 const App: React.FC = () => {
   const [user, setUser] = useState<AuthUser>(null);
@@ -12,7 +11,6 @@ const App: React.FC = () => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Check local storage for existing session
     const savedUser = localStorage.getItem('kingdomkids_session');
     if (savedUser) {
       setUser(JSON.parse(savedUser));
@@ -41,7 +39,6 @@ const App: React.FC = () => {
 
   if (loading) return <div className="h-screen flex items-center justify-center">Loading...</div>;
 
-  // Router logic
   const renderView = () => {
     const path = currentPath.replace('#', '');
     
@@ -64,7 +61,6 @@ const App: React.FC = () => {
       return <TeacherDashboard user={user} onLogout={handleLogout} />;
     }
 
-    // Fallback based on role
     window.location.hash = user.role === UserRole.ADMIN ? '#/admin' : '#/teacher';
     return null;
   };
