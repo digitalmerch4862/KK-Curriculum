@@ -2,6 +2,11 @@
 import { supabase } from '../lib/supabaseClient';
 import { UserRole, LessonStatus, Lesson, LessonActivity, LessonVideo, Attachment, LessonProgress } from '../types';
 
+const handleSupabaseError = (error: any, context: string) => {
+  console.error(`Supabase Error [${context}]:`, error);
+  throw new Error(error.message || `An error occurred while ${context}`);
+};
+
 export const db = {
   lessons: {
     async list(role: UserRole) {
@@ -15,12 +20,13 @@ export const db = {
       }
 
       const { data, error } = await query;
-      if (error) throw error;
+
+      if (error) handleSupabaseError(error, 'fetching lessons');
       return data as Lesson[];
     },
 
     async get(id: string) {
-      const { data: lesson, error: lError } = await supabase
+      const { data, error } = await supabase
         .from('lessons')
         .select(`
           *,
@@ -31,8 +37,8 @@ export const db = {
         .eq('id', id)
         .single();
 
-      if (lError) return null;
-      return lesson as Lesson;
+      if (error) handleSupabaseError(error, 'fetching lesson details');
+      return data as Lesson;
     },
 
     async upsert(
@@ -40,40 +46,52 @@ export const db = {
       activities?: Partial<LessonActivity>[], 
       videos?: Partial<LessonVideo>[]
     ) {
+      // Ensure we don't try to insert undefined id for new lessons
+      const { id, ...lessonPayload } = lesson;
+      const payload = id ? { id, ...lessonPayload } : lessonPayload;
+
       const { data: lessonData, error: lError } = await supabase
         .from('lessons')
         .upsert({
-          ...lesson,
+          ...payload,
           updated_at: new Date().toISOString()
         })
         .select()
         .single();
 
-      if (lError) throw lError;
+      if (lError) handleSupabaseError(lError, 'saving lesson');
 
       if (activities && lessonData) {
+        // Clear existing activities and insert fresh ones to maintain order and sync
         await supabase.from('lesson_activities').delete().eq('lesson_id', lessonData.id);
-        const activitiesToInsert = activities.map((a, i) => ({
-          ...a,
-          lesson_id: lessonData.id,
-          sort_order: i
-        }));
-        if (activitiesToInsert.length > 0) {
-          const { error } = await supabase.from('lesson_activities').insert(activitiesToInsert);
-          if (error) throw error;
+        if (activities.length > 0) {
+          const activitiesToInsert = activities.map((a, i) => {
+            const { id: _, lesson_id: __, ...rest } = a;
+            return {
+              ...rest,
+              lesson_id: lessonData.id,
+              sort_order: i
+            };
+          });
+          const { error: aError } = await supabase.from('lesson_activities').insert(activitiesToInsert);
+          if (aError) handleSupabaseError(aError, 'saving activities');
         }
       }
 
       if (videos && lessonData) {
+        // Clear existing video links and re-insert
         await supabase.from('lesson_videos').delete().eq('lesson_id', lessonData.id);
-        const videosToInsert = videos.map((v, i) => ({
-          ...v,
-          lesson_id: lessonData.id,
-          sort_order: i
-        }));
-        if (videosToInsert.length > 0) {
-          const { error } = await supabase.from('lesson_videos').insert(videosToInsert);
-          if (error) throw error;
+        if (videos.length > 0) {
+          const videosToInsert = videos.map((v, i) => {
+            const { id: _, lesson_id: __, ...rest } = v;
+            return {
+              ...rest,
+              lesson_id: lessonData.id,
+              sort_order: i
+            };
+          });
+          const { error: vError } = await supabase.from('lesson_videos').insert(videosToInsert);
+          if (vError) handleSupabaseError(vError, 'saving videos');
         }
       }
 
@@ -82,7 +100,7 @@ export const db = {
 
     async delete(id: string) {
       const { error } = await supabase.from('lessons').delete().eq('id', id);
-      if (error) throw error;
+      if (error) handleSupabaseError(error, 'deleting lesson');
     }
   },
 
@@ -93,13 +111,18 @@ export const db = {
         .insert(attachment)
         .select()
         .single();
-      if (error) throw error;
+      if (error) handleSupabaseError(error, 'adding attachment record');
       return data;
     },
     async remove(id: string, storagePath: string) {
-      await supabase.storage.from('lesson-assets').remove([storagePath]);
-      const { error } = await supabase.from('attachments').delete().eq('id', id);
-      if (error) throw error;
+      // 1. Remove from storage
+      const { error: sError } = await supabase.storage.from('lesson-assets').remove([storagePath]);
+      // Note: We continue even if storage removal fails to keep DB clean, but we log it
+      if (sError) console.warn("Storage removal failed, proceeding with DB record deletion", sError);
+      
+      // 2. Remove from DB
+      const { error: dError } = await supabase.from('attachments').delete().eq('id', id);
+      if (dError) handleSupabaseError(dError, 'removing attachment record');
     }
   },
 
@@ -112,13 +135,12 @@ export const db = {
         .eq('teacher_id', teacherId)
         .maybeSingle();
       
-      if (error) return null;
+      if (error) handleSupabaseError(error, 'fetching progress');
       return data as LessonProgress;
     },
 
     async toggle(lessonId: string, teacherId: string) {
       const existing = await this.get(lessonId, teacherId);
-      
       if (existing) {
         const { error } = await supabase
           .from('lesson_progress')
@@ -127,7 +149,7 @@ export const db = {
             completed_at: !existing.completed ? new Date().toISOString() : null
           })
           .eq('id', existing.id);
-        if (error) throw error;
+        if (error) handleSupabaseError(error, 'updating progress');
       } else {
         const { error } = await supabase
           .from('lesson_progress')
@@ -137,7 +159,7 @@ export const db = {
             completed: true,
             completed_at: new Date().toISOString()
           });
-        if (error) throw error;
+        if (error) handleSupabaseError(error, 'creating progress');
       }
     }
   },
@@ -145,12 +167,13 @@ export const db = {
   storage: {
     async upload(file: File) {
       const fileExt = file.name.split('.').pop();
+      // Generate a unique path to avoid collisions
       const fileName = `${Math.random().toString(36).substring(2)}-${Date.now()}.${fileExt}`;
       const { data, error } = await supabase.storage
         .from('lesson-assets')
         .upload(fileName, file);
       
-      if (error) throw error;
+      if (error) handleSupabaseError(error, 'uploading file');
       return data;
     },
 
@@ -159,7 +182,7 @@ export const db = {
         .from('lesson-assets')
         .createSignedUrl(path, 3600);
       
-      if (error) throw error;
+      if (error) handleSupabaseError(error, 'generating download link');
       return data.signedUrl;
     }
   }
