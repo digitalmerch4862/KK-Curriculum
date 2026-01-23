@@ -1,9 +1,10 @@
+
 import React, { useState, useEffect } from 'react';
 import { db } from '../services/supabaseService.ts';
 import { categorizeLessonTitle, generateFullLesson } from '../services/geminiService.ts';
 import { Lesson, LessonStatus, UserRole, Profile, LessonActivity, LessonVideo, Attachment, LessonContentStructure, LessonSubSection } from '../types.ts';
 
-// Helper components defined outside of the main component to resolve TS prop check issues in JSX maps
+// Helper components defined outside of the main component
 
 const SectionHeader = ({ title }: { title: string }) => (
   <div className="flex items-center gap-3 mb-6 md:mb-8">
@@ -107,7 +108,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
 
   const parseMarkdownToStructure = (md: string) => {
     const newStructure: LessonContentStructure = { read: [], teach: [], engage: [] };
-    const mainSections = md.split(/^# \d\. /m);
+    const mainSections = md.split(/^# \d\\. /m);
     
     ['read', 'teach', 'engage'].forEach((key, i) => {
       const sectionContent = mainSections[i + 1] || '';
@@ -141,7 +142,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
       setLessons(data);
       setError(null);
     } catch (e: any) {
-      setError("Failed to load lessons directory.");
+      console.error("Fetch lessons error:", e);
+      setError(`Failed to load lessons. Error: ${e.message}`);
     }
   };
 
@@ -155,8 +157,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
         setActivities(full.activities || []);
         setVideos(full.videos || []);
         setAttachments(full.attachments || []);
-        // FIX: Load existing attachments into the UI state so they don't get wiped
-        setDownloadLinks(full.attachments || []); 
+        setDownloadLinks((full.attachments || []).map((at: Attachment) => ({ name: at.name, url: at.storage_path }))); 
         setGenerationHistory([]);
         setCurrentHistoryIndex(-1);
         window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -201,32 +202,52 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
 
   const handleSave = async (status: LessonStatus) => {
     if (!formData.title) return alert("Lesson Identity (Title) is required.");
+    
     setLoading(true);
     setError(null);
+    
     try {
       const finalMarkdown = serializeStructureToMarkdown();
       
-      // FIX: Construct the payload explicitly to include the downloadLinks from state
-      // and ensure we don't accidentally pass an ID if it's a new creation
+      // Separate lesson fields from relation fields
+      const { 
+        activities: _a, 
+        videos: _v, 
+        attachments: _at, 
+        progress: _p,
+        ...restOfFormData 
+      } = formData;
+
       const payload = { 
-        ...formData, 
+        ...restOfFormData, 
         content: finalMarkdown, 
         status, 
-        created_by: user.id,
-        attachments: downloadLinks // Sync UI state to DB payload
+        created_by: user.id
       };
 
       if (editingId === 'new') {
-        delete (payload as any).id;
+        // @ts-ignore
+        delete payload.id;
       }
 
+      console.log("Saving lesson with payload:", payload);
       await db.lessons.upsert(payload, activities, videos);
       
+      alert(`Lesson successfully ${status === LessonStatus.PUBLISHED ? 'published' : 'saved as draft'}!`);
       setEditingId(null);
       fetchLessons();
     } catch (e: any) {
-      setError(`Save failed: ${e.message}`);
-      alert(`Save failed: ${e.message}`); // FIX: Alert user because error UI is hidden
+      console.error("Save Error Details:", e);
+      const errorMsg = e.message || "Unknown error";
+      
+      // Specific troubleshooting message for "Table not found"
+      if (errorMsg.toLowerCase().includes("could not find the table") || errorMsg.includes("404")) {
+        alert(`CRITICAL DATABASE ERROR: The table 'lessons' was not found in your Supabase project.\n\nPlease go to your Supabase SQL Editor and ensure you have created the required tables (lessons, lesson_activities, etc.).`);
+      } else {
+        alert(`SAVE FAILED: ${errorMsg}\n\nCheck your console for full error logs.`);
+      }
+      
+      setError(`Save failed: ${errorMsg}`);
     } finally {
       setLoading(false);
     }
@@ -271,7 +292,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
 
   const handleGenerateAgain = () => {
     if (generationHistory.length >= 3 && generationHistory.length < 5) {
-      // Prompt user to refine objective after 3rd attempt
       setAiStep('questions');
     } else if (generationHistory.length >= 5) {
       alert("Maximum generations reached. Please choose from the existing versions.");
@@ -485,6 +505,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
                 <div className="flex items-center gap-2 md:gap-3 w-full md:w-auto">
                   <button onClick={() => setEditingId(null)} className="flex-1 md:flex-none px-4 md:px-6 py-3 text-[10px] md:text-xs font-black uppercase text-gray-400 hover:text-black tracking-widest">DISCARD</button>
                   <button onClick={() => setIsAiModalOpen(true)} className="flex-[2] md:flex-none px-6 md:px-8 py-3.5 md:py-4 bg-[#EF4E92] rounded-full text-[10px] md:text-xs font-black uppercase tracking-widest text-white shadow-lg shadow-[#EF4E92]/20 hover:scale-[1.02] transition-transform">GENERATE WITH AI</button>
+                  
                   <button onClick={() => handleSave(LessonStatus.DRAFT)} className="flex-1 md:flex-none px-6 md:px-10 py-3.5 md:py-4 bg-[#003882] rounded-full text-[10px] md:text-xs font-black uppercase tracking-widest text-white shadow-lg shadow-[#003882]/20 hover:scale-[1.02] transition-transform">DRAFT</button>
                   <button onClick={() => handleSave(LessonStatus.PUBLISHED)} className="flex-[2] md:flex-none px-8 md:px-12 py-3.5 md:py-4 bg-[#EF4E92] rounded-full text-[10px] md:text-xs font-black uppercase tracking-widest text-white shadow-lg shadow-[#EF4E92]/20 hover:scale-[1.02] transition-transform">PUBLISH</button>
                 </div>

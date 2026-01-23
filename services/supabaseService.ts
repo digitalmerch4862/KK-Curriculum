@@ -1,9 +1,11 @@
+
 import { supabase } from '../lib/supabaseClient.ts';
 import { UserRole, LessonStatus, Lesson, LessonActivity, LessonVideo, Attachment, LessonProgress } from '../types.ts';
 
 const handleSupabaseError = (error: any, context: string) => {
   console.error(`Supabase Error [${context}]:`, error);
-  throw new Error(error.message || `An error occurred while ${context}`);
+  const message = error.message || error.details || JSON.stringify(error);
+  throw new Error(`${message} (Context: ${context})`);
 };
 
 export const db = {
@@ -45,7 +47,16 @@ export const db = {
       activities?: Partial<LessonActivity>[], 
       videos?: Partial<LessonVideo>[]
     ) {
-      const { id, ...lessonPayload } = lesson;
+      const { 
+        id, 
+        activities: _a, 
+        videos: _v, 
+        attachments: _at, 
+        progress: _p,
+        ...lessonPayload 
+      } = lesson;
+
+      // If id is 'new', we let Supabase generate a UUID
       const payload = id && id !== 'new' ? { id, ...lessonPayload } : lessonPayload;
 
       const { data: lessonData, error: lError } = await supabase
@@ -60,7 +71,9 @@ export const db = {
       if (lError) handleSupabaseError(lError, 'saving lesson');
 
       if (activities && lessonData) {
-        await supabase.from('lesson_activities').delete().eq('lesson_id', lessonData.id);
+        const { error: dError } = await supabase.from('lesson_activities').delete().eq('lesson_id', lessonData.id);
+        if (dError) handleSupabaseError(dError, 'cleaning up old activities');
+
         if (activities.length > 0) {
           const activitiesToInsert = activities.map((a, i) => {
             const { id: _, lesson_id: __, ...rest } = a;
@@ -76,7 +89,9 @@ export const db = {
       }
 
       if (videos && lessonData) {
-        await supabase.from('lesson_videos').delete().eq('lesson_id', lessonData.id);
+        const { error: dvError } = await supabase.from('lesson_videos').delete().eq('lesson_id', lessonData.id);
+        if (dvError) handleSupabaseError(dvError, 'cleaning up old videos');
+
         if (videos.length > 0) {
           const videosToInsert = videos.map((v, i) => {
             const { id: _, lesson_id: __, ...rest } = v;
@@ -111,8 +126,10 @@ export const db = {
       return data;
     },
     async remove(id: string, storagePath: string) {
-      const { error: sError } = await supabase.storage.from('lesson-assets').remove([storagePath]);
-      if (sError) console.warn("Storage removal failed", sError);
+      if (storagePath) {
+        const { error: sError } = await supabase.storage.from('lesson-assets').remove([storagePath]);
+        if (sError) console.warn("Storage removal failed", sError);
+      }
       
       const { error: dError } = await supabase.from('attachments').delete().eq('id', id);
       if (dError) handleSupabaseError(dError, 'removing attachment record');
