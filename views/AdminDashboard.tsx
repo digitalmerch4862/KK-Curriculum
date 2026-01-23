@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { db } from '../services/supabaseService.ts';
 import { categorizeLessonTitle, generateFullLesson } from '../services/geminiService.ts';
@@ -156,7 +155,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
         setActivities(full.activities || []);
         setVideos(full.videos || []);
         setAttachments(full.attachments || []);
-        setDownloadLinks([]); 
+        // FIX: Load existing attachments into the UI state so they don't get wiped
+        setDownloadLinks(full.attachments || []); 
         setGenerationHistory([]);
         setCurrentHistoryIndex(-1);
         window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -205,11 +205,28 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
     setError(null);
     try {
       const finalMarkdown = serializeStructureToMarkdown();
-      await db.lessons.upsert({ ...formData, content: finalMarkdown, status, created_by: user.id }, activities, videos);
+      
+      // FIX: Construct the payload explicitly to include the downloadLinks from state
+      // and ensure we don't accidentally pass an ID if it's a new creation
+      const payload = { 
+        ...formData, 
+        content: finalMarkdown, 
+        status, 
+        created_by: user.id,
+        attachments: downloadLinks // Sync UI state to DB payload
+      };
+
+      if (editingId === 'new') {
+        delete (payload as any).id;
+      }
+
+      await db.lessons.upsert(payload, activities, videos);
+      
       setEditingId(null);
       fetchLessons();
     } catch (e: any) {
       setError(`Save failed: ${e.message}`);
+      alert(`Save failed: ${e.message}`); // FIX: Alert user because error UI is hidden
     } finally {
       setLoading(false);
     }
