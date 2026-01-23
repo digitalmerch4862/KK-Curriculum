@@ -4,6 +4,7 @@ import { db } from '../services/supabaseService.ts';
 import { Lesson, Profile } from '../types.ts';
 import ActivityCard from '../components/ActivityCard.tsx';
 import VideoEmbed from '../components/VideoEmbed.tsx';
+import LessonTextTab from '../components/LessonTextTab.tsx';
 
 interface LessonDetailProps {
   lessonId: string;
@@ -68,7 +69,7 @@ const LessonDetail: React.FC<LessonDetailProps> = ({ lessonId, user, onBack }) =
         </button>
       </header>
 
-      <main className="max-w-4xl mx-auto px-6 py-8 md:py-12">
+      <main className="max-w-6xl mx-auto px-6 py-8 md:py-12">
         <div className="flex border-b border-gray-100 mb-8 md:mb-12 overflow-x-auto whitespace-nowrap scrollbar-hide gap-4 md:gap-8">
           {(['overview', 'text', 'activities', 'media'] as const).map(tab => (
             <button
@@ -85,7 +86,7 @@ const LessonDetail: React.FC<LessonDetailProps> = ({ lessonId, user, onBack }) =
 
         <div className="animate-in fade-in slide-in-from-bottom-6 duration-700">
           {activeTab === 'overview' && (
-            <div className="space-y-12">
+            <div className="max-w-4xl mx-auto">
               <section className="space-y-6">
                 <h2 className="text-3xl md:text-5xl font-black text-gray-900 tracking-tighter leading-tight">{lesson.title}</h2>
                 <div className="flex flex-wrap gap-2">
@@ -103,17 +104,11 @@ const LessonDetail: React.FC<LessonDetailProps> = ({ lessonId, user, onBack }) =
           )}
 
           {activeTab === 'text' && (
-            <div className="bg-white rounded-[48px] p-6 md:p-12 border border-gray-50 shadow-sm">
-              <article className="prose prose-pink max-w-none">
-                <div className="text-gray-800 leading-[1.8] text-base md:text-lg whitespace-pre-wrap font-medium">
-                  {lesson.content}
-                </div>
-              </article>
-            </div>
+            <LessonTextTab content={lesson.content} />
           )}
 
           {activeTab === 'activities' && (
-            <div className="space-y-8 md:space-y-12">
+            <div className="max-w-4xl mx-auto space-y-8 md:space-y-12">
               {lesson.activities?.length ? (
                 lesson.activities.map(activity => (
                   <ActivityCard key={activity.id} activity={activity} />
@@ -125,7 +120,7 @@ const LessonDetail: React.FC<LessonDetailProps> = ({ lessonId, user, onBack }) =
           )}
 
           {activeTab === 'media' && (
-            <div className="space-y-16">
+            <div className="max-w-4xl mx-auto space-y-16">
               <section className="space-y-8">
                 <div className="flex items-center gap-3">
                   <div className="w-1.5 h-6 bg-[#EF4E92] rounded-full"></div>
