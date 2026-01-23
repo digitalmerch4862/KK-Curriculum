@@ -13,16 +13,6 @@ const SectionHeader: React.FC<{ title: string }> = ({ title }) => (
   </div>
 );
 
-const BIBLE_BOOKS = [
-  "Genesis", "Exodus", "Leviticus", "Numbers", "Deuteronomy", "Joshua", "Judges", "Ruth", "1 Samuel", "2 Samuel", 
-  "1 Kings", "2 Kings", "1 Chronicles", "2 Chronicles", "Ezra", "Nehemiah", "Esther", "Job", "Psalms", "Proverbs", 
-  "Ecclesiastes", "Song of Solomon", "Isaiah", "Jeremiah", "Lamentations", "Ezekiel", "Daniel", "Hosea", "Joel", 
-  "Amos", "Obadiah", "Jonah", "Micah", "Nahum", "Habakkuk", "Zephaniah", "Haggai", "Zechariah", "Malachi", "Matthew", 
-  "Mark", "Luke", "John", "Acts", "Romans", "1 Corinthians", "2 Corinthians", "Galatians", "Ephesians", "Philippians", 
-  "Colossians", "1 Thessalonians", "2 Thessalonians", "1 Timothy", "2 Timothy", "Titus", "Philemon", "Hebrews", 
-  "James", "1 Peter", "2 Peter", "1 John", "2 John", "3 John", "Jude", "Revelation"
-];
-
 interface SubSectionCardProps {
   sub: LessonSubSection;
   onUpdate: (updates: Partial<LessonSubSection>) => void;
@@ -36,44 +26,40 @@ const SubSectionCard: React.FC<SubSectionCardProps> = ({
   onDelete, 
   placeholder 
 }) => {
-  const [bibleBook, setBibleBook] = useState('');
-  const [bibleChapter, setBibleChapter] = useState('');
-  const [bibleVerse, setBibleVerse] = useState('');
+  const [bibleReference, setBibleReference] = useState('');
   const [isFetching, setIsFetching] = useState(false);
 
   const isBibleCard = sub.title.toLowerCase().includes('bible text');
 
   const fetchBibleText = async () => {
-    // Sanitize inputs by trimming whitespace
-    const book = bibleBook.trim();
-    const chapter = bibleChapter.trim();
-    const verse = bibleVerse.trim();
-
-    if (!book || !chapter) {
-      return alert("Please enter at least a Book and Chapter (e.g. Genesis 1 or Genesis 1-2)");
-    }
-
-    // Dynamic Query Construction Logic
-    // Scenario A (Whole Chapter/s): If Book and Chapter are filled, but Verse is empty -> "{Book} {Chapter}"
-    // Scenario B (Specific Verses): If Book, Chapter, and Verse are ALL filled -> "{Book} {Chapter}:{Verse}"
-    let reference = `${book} ${chapter}`;
-    if (verse) {
-      reference = `${book} ${chapter}:${verse}`;
-    }
+    // Sanitize input: remove extra spaces and normalize special dashes (en-dash, em-dash)
+    const sanitizedQuery = bibleReference.trim().replace(/–|—/g, '-');
     
+    if (!sanitizedQuery) {
+      return alert("Please enter a reference (e.g. Genesis 1-2 or John 3:16)");
+    }
+
     setIsFetching(true);
     try {
-      const res = await fetch(`https://bible-api.com/${encodeURIComponent(reference)}`);
+      const res = await fetch(`https://bible-api.com/${encodeURIComponent(sanitizedQuery)}`);
+      
+      if (!res.ok) {
+        if (res.status === 404) {
+          throw new Error(`Reference "${sanitizedQuery}" not found. Please check spelling.`);
+        }
+        throw new Error("Failed to connect to the Bible API.");
+      }
+      
       const data = await res.json();
       
       if (data && data.text) {
         onUpdate({ content: data.text.trim() });
       } else {
-        alert(`Reference "${reference}" not found. For chapter ranges, try "Genesis 1-2" with an empty verse field.`);
+        throw new Error(`Reference "${sanitizedQuery}" not found.`);
       }
-    } catch (e) {
+    } catch (e: any) {
       console.error("Bible Fetch Error:", e);
-      alert("Failed to fetch Bible text. Please check your internet connection.");
+      alert(e.message || "Failed to fetch Bible text. Please check your internet connection.");
     } finally {
       setIsFetching(false);
     }
@@ -81,7 +67,6 @@ const SubSectionCard: React.FC<SubSectionCardProps> = ({
 
   return (
     <div className="bg-white p-8 md:p-10 rounded-[40px] relative shadow-sm border-2 border-transparent hover:border-pink-50 transition-all group flex flex-col min-h-[220px]">
-      {/* Remove Close/Delete (X) icon for Bible Text card */}
       {!isBibleCard && (
         <button 
           onClick={(e) => { e.stopPropagation(); onDelete(); }} 
@@ -106,57 +91,35 @@ const SubSectionCard: React.FC<SubSectionCardProps> = ({
       </div>
 
       {isBibleCard && (
-        <div className="mb-6 space-y-3 max-w-full">
-          {/* Row 1: Book Searchable Dropdown */}
-          <div className="w-full">
-            <input 
-              list="bible-books"
-              type="text"
-              className="w-full bg-gray-50 border-2 border-gray-100 rounded-xl px-4 py-2.5 text-sm focus:border-[#EF4E92] outline-none transition-all font-medium"
-              placeholder="Select Book (e.g. Genesis)"
-              value={bibleBook}
-              onChange={e => setBibleBook(e.target.value)}
-            />
-            <datalist id="bible-books">
-              {BIBLE_BOOKS.map(book => <option key={book} value={book} />)}
-            </datalist>
+        <div className="mb-6">
+          <div className="flex flex-col gap-3">
+            <div className="relative">
+              <input 
+                type="text"
+                className="w-full bg-gray-50 border-2 border-gray-100 rounded-2xl px-6 py-4 text-sm focus:border-[#EF4E92] outline-none transition-all font-medium"
+                placeholder="Reference (e.g. Genesis 1-2)"
+                value={bibleReference}
+                onChange={e => setBibleReference(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && fetchBibleText()}
+              />
+            </div>
+            <button 
+              onClick={fetchBibleText}
+              disabled={isFetching}
+              className="w-full h-12 bg-[#003882] text-white rounded-2xl flex items-center justify-center gap-2 hover:bg-[#003882]/90 disabled:opacity-50 transition-all shadow-sm font-black uppercase tracking-widest text-[10px]"
+            >
+              {isFetching ? (
+                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+              ) : (
+                <>
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                  </svg>
+                  <span>Fetch Verses</span>
+                </>
+              )}
+            </button>
           </div>
-          
-          {/* Row 2: Chapter (text) and Verse (text) side-by-side */}
-          <div className="flex items-center gap-2">
-            <input 
-              type="text"
-              className="flex-1 min-w-0 bg-gray-50 border-2 border-gray-100 rounded-xl px-4 py-2.5 text-sm focus:border-[#EF4E92] outline-none transition-all font-medium"
-              placeholder="Ch (e.g. 1-2)"
-              value={bibleChapter}
-              onChange={e => setBibleChapter(e.target.value)}
-            />
-            <input 
-              type="text"
-              className="flex-1 min-w-0 bg-gray-50 border-2 border-gray-100 rounded-xl px-4 py-2.5 text-sm focus:border-[#EF4E92] outline-none transition-all font-medium"
-              placeholder="Verse(s)"
-              value={bibleVerse}
-              onChange={e => setBibleVerse(e.target.value)}
-            />
-          </div>
-
-          {/* Row 3: Full Width Fetch Button */}
-          <button 
-            onClick={fetchBibleText}
-            disabled={isFetching}
-            className="w-full h-11 bg-[#003882] text-white rounded-xl flex items-center justify-center gap-2 hover:bg-[#003882]/90 disabled:opacity-50 transition-all shadow-sm shrink-0 font-black uppercase tracking-widest text-[10px]"
-          >
-            {isFetching ? (
-              <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-            ) : (
-              <>
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                </svg>
-                <span>Fetch Verses</span>
-              </>
-            )}
-          </button>
         </div>
       )}
 

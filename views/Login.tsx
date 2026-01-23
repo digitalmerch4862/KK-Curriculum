@@ -8,8 +8,18 @@ interface LoginProps {
 
 const Login: React.FC<LoginProps> = ({ onLogin }) => {
   const profiles: Profile[] = [
-    { id: '1', role: UserRole.ADMIN, name: 'Admin Coordinator', created_at: '' },
-    { id: '2', role: UserRole.TEACHER, name: 'Lead Teacher', created_at: '' }
+    { 
+      id: 'd6e6a105-e4d0-4965-9856-d748f32386a3', 
+      role: UserRole.ADMIN, 
+      name: 'Admin Coordinator', 
+      created_at: new Date().toISOString() 
+    },
+    { 
+      id: 'f33b6644-8d48-4c6e-8e3b-b0b3d8f8a652', 
+      role: UserRole.TEACHER, 
+      name: 'Lead Teacher Sarah', 
+      created_at: new Date().toISOString() 
+    }
   ];
 
   return (

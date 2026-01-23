@@ -33,6 +33,7 @@ const LessonDetail: React.FC<LessonDetailProps> = ({ lessonId, user, onBack }) =
   
   // Modal states
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [downloadUrl, setDownloadUrl] = useState<string | null>(null);
 
   useEffect(() => {
     const fetch = async () => {
@@ -58,6 +59,21 @@ const LessonDetail: React.FC<LessonDetailProps> = ({ lessonId, user, onBack }) =
     }
   };
 
+  const handlePrint = (url: string) => {
+    // We use a hidden iframe to print only the resource content
+    const iframe = document.createElement('iframe');
+    iframe.style.display = 'none';
+    iframe.src = url;
+    document.body.appendChild(iframe);
+    
+    iframe.onload = () => {
+      iframe.contentWindow?.focus();
+      iframe.contentWindow?.print();
+      // Keep it in DOM briefly for mobile browsers
+      setTimeout(() => document.body.removeChild(iframe), 2000);
+    };
+  };
+
   if (loading) return <div className="p-10 text-center animate-pulse font-black text-gray-300">Loading Masterpiece...</div>;
   if (!lesson) return <div className="p-10 text-center">Lesson not found.</div>;
 
@@ -69,12 +85,37 @@ const LessonDetail: React.FC<LessonDetailProps> = ({ lessonId, user, onBack }) =
           <div className="bg-white w-full h-full max-w-6xl rounded-[40px] shadow-2xl relative overflow-hidden flex flex-col">
             <div className="p-6 flex items-center justify-between border-b border-gray-100">
               <h3 className="font-black text-xs uppercase tracking-widest text-gray-400">Resource Preview</h3>
-              <button 
-                onClick={() => setPreviewUrl(null)} 
-                className="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center text-gray-500 hover:bg-[#EF4E92] hover:text-white transition-all shadow-sm"
-              >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M6 18L18 6M6 6l12 12" /></svg>
-              </button>
+              <div className="flex items-center gap-2">
+                {/* PRINT BUTTON */}
+                <button 
+                  onClick={() => handlePrint(downloadUrl || previewUrl)}
+                  className="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center text-gray-500 hover:bg-[#EF4E92] hover:text-white transition-all shadow-sm"
+                  title="Print Resource"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+                  </svg>
+                </button>
+                {/* OPEN EXTERNAL */}
+                <a 
+                  href={previewUrl} 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center text-gray-500 hover:bg-[#EF4E92] hover:text-white transition-all shadow-sm"
+                  title="Open in New Tab"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                  </svg>
+                </a>
+                {/* CLOSE */}
+                <button 
+                  onClick={() => { setPreviewUrl(null); setDownloadUrl(null); }} 
+                  className="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center text-gray-500 hover:bg-[#EF4E92] hover:text-white transition-all shadow-sm"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M6 18L18 6M6 6l12 12" /></svg>
+                </button>
+              </div>
             </div>
             <div className="flex-1 bg-gray-50">
               <iframe 
@@ -111,7 +152,6 @@ const LessonDetail: React.FC<LessonDetailProps> = ({ lessonId, user, onBack }) =
       </header>
 
       <main className="max-w-6xl mx-auto">
-        {/* Sticky Tab Navigation Bar */}
         <div className="sticky top-[57px] md:top-[73px] z-40 bg-white border-b border-gray-100 px-6 py-2 md:py-4 overflow-x-auto whitespace-nowrap scrollbar-hide flex gap-4 md:gap-8">
           {(['overview', 'activities', 'media'] as const).map(tab => (
             <button
@@ -187,7 +227,10 @@ const LessonDetail: React.FC<LessonDetailProps> = ({ lessonId, user, onBack }) =
                           <div className="flex items-center gap-2">
                             {/* VIEW BUTTON */}
                             <button 
-                              onClick={() => setPreviewUrl(driveLinks?.preview || att.storage_path)}
+                              onClick={() => {
+                                setPreviewUrl(driveLinks?.preview || att.storage_path);
+                                setDownloadUrl(driveLinks?.download || att.storage_path);
+                              }}
                               className="w-10 h-10 bg-gray-50 rounded-2xl flex items-center justify-center text-gray-400 hover:bg-[#EF4E92] hover:text-white transition-all shadow-sm"
                               title="View & Print"
                             >

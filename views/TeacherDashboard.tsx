@@ -86,16 +86,18 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
                 <div 
                   key={lesson.id} 
                   onClick={() => window.location.hash = `#/lesson/${lesson.id}`} 
-                  className="group bg-white border border-gray-50 rounded-[40px] p-8 shadow-sm hover:shadow-2xl hover:scale-[1.02] transition-all cursor-pointer flex flex-col min-h-[280px]"
+                  className="group bg-white border border-gray-100 rounded-[32px] md:rounded-[40px] p-6 md:p-8 shadow-sm hover:shadow-2xl hover:scale-[1.02] transition-all cursor-pointer flex flex-col h-auto lg:min-h-[300px]"
                 >
-                  <div className="flex-1">
-                    <div className="flex justify-between items-start mb-4">
+                  <div className="flex-1 flex flex-col">
+                    <div className="mb-4">
                       <span className="bg-pink-50 text-[#EF4E92] px-3 py-1 rounded-full text-[8px] font-black uppercase tracking-widest">{lesson.category}</span>
                     </div>
                     <h2 className="text-xl font-black mb-3 text-gray-900 group-hover:text-[#EF4E92] transition-colors leading-tight">{lesson.title}</h2>
-                    <p className="text-sm text-gray-400 font-medium line-clamp-3 mb-6 leading-relaxed">{lesson.summary}</p>
+                    <p className="text-sm text-gray-400 font-medium line-clamp-3 mb-4 md:mb-6 leading-relaxed flex-1">
+                      {lesson.summary}
+                    </p>
                   </div>
-                  <div className="flex items-center justify-between pt-6 border-t border-gray-50">
+                  <div className="flex items-center justify-between pt-5 md:pt-6 border-t border-gray-50 mt-auto">
                     <span className="text-[10px] font-black text-gray-300 uppercase tracking-widest">Grades {lesson.grade_min}-{lesson.grade_max}</span>
                     <div className="w-8 h-8 rounded-full bg-gray-50 flex items-center justify-center text-gray-400 group-hover:bg-[#EF4E92] group-hover:text-white transition-all">
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M9 5l7 7-7 7" /></svg>
