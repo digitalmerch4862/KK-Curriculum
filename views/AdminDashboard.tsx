@@ -104,30 +104,32 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
     fetchLessons();
   }, []);
 
-  useEffect(() => {
-    if (editingId && formData.content && editingId !== 'new') {
-      parseMarkdownToStructure(formData.content);
-    }
-  }, [editingId]);
-
   const parseMarkdownToStructure = (md: string) => {
     const newStructure: LessonContentStructure = { read: [], teach: [], engage: [] };
+    if (!md) return newStructure;
+
+    // Split by main headers (# 1. Read, # 2. Teach, # 3. Engage)
     const mainSections = md.split(/^# \d\. /m);
     
     ['read', 'teach', 'engage'].forEach((key, i) => {
-      const sectionContent = mainSections[i + 1] || '';
-      const subSections = sectionContent.split(/^## /m).filter(s => s.trim());
+      const fullBlock = mainSections[i + 1] || '';
+      // A section block starts with its title (e.g., "Read\n\n") then subheaders
+      // We split by ## and skip the first part which is the main section header
+      const parts = fullBlock.split(/^## /m);
+      const subSections = parts.slice(1).filter(s => s.trim());
+      
       (newStructure as any)[key] = subSections.map(s => {
         const lines = s.split('\n');
+        const title = lines[0].trim();
         const content = lines.slice(1).join('\n').trim();
         return {
           id: Math.random().toString(36).substr(2, 9),
-          title: lines[0].trim() || 'Block',
+          title: title || 'Block',
           content: content || ''
         };
       });
     });
-    setStructure(newStructure);
+    return newStructure;
   };
 
   const serializeStructureToMarkdown = () => {
@@ -159,6 +161,11 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
       if (full) {
         setEditingId(id);
         setFormData(full);
+        
+        // Parse directly to avoid state race conditions and phantom headers
+        const parsedStructure = parseMarkdownToStructure(full.content || '');
+        setStructure(parsedStructure);
+        
         setActivities(full.activities || []);
         setVideos(full.videos || []);
         setAttachments(full.attachments || []);
@@ -194,22 +201,14 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
     setFormData({ 
       title: '', summary: '', content: '', category: 'HISTORY', series: '', grade_min: 1, grade_max: 5, tags: [], status: LessonStatus.DRAFT 
     });
+    
+    // Start with empty arrays to prevent phantom placeholders
     setStructure({
-      read: [
-        { id: 'r1', title: 'Bible Text', content: '' },
-        { id: 'r2', title: 'Memory Verse', content: '' }
-      ],
-      teach: [
-        { id: 't1', title: 'Big Picture', content: '' },
-        { id: 't2', title: 'Teach the Story', content: '' },
-        { id: 't3', title: 'Gospel Connection', content: '' }
-      ],
-      engage: [
-        { id: 'e1', title: 'Discussion', content: '' },
-        { id: 'e2', title: 'Activities', content: '' },
-        { id: 'e3', title: 'Crafts', content: '' }
-      ]
+      read: [],
+      teach: [],
+      engage: []
     });
+    
     setActivities([]);
     setVideos([]);
     setAttachments([]);
