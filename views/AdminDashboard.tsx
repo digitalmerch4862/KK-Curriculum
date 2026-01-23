@@ -28,8 +28,9 @@ const SubSectionCard: React.FC<SubSectionCardProps> = ({
 }) => (
   <div className="bg-white p-8 md:p-10 rounded-[40px] relative shadow-sm border-2 border-transparent hover:border-pink-50 transition-all group flex flex-col min-h-[220px]">
     <button 
-      onClick={onDelete} 
-      className="absolute top-6 right-8 text-gray-200 hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100 z-10"
+      onClick={(e) => { e.stopPropagation(); onDelete(); }} 
+      className="absolute top-6 right-8 text-gray-300 hover:text-red-500 transition-colors z-10"
+      aria-label="Delete section"
     >
       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M6 18L18 6M6 6l12 12" />
@@ -181,7 +182,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
         setEditingId(null);
       }
       await fetchLessons();
-      alert("Lesson deleted successfully.");
     } catch (e: any) {
       alert("Delete failed: " + e.message);
     } finally {
@@ -482,7 +482,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
                 </div>
               </div>
 
-              {/* LESSON BODY - MATCHED TO SCREENSHOT */}
+              {/* LESSON BODY */}
               <div className="space-y-8">
                 <SectionHeader title="The Lesson Body" />
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
@@ -513,7 +513,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
                   {activities.map((act, idx) => (
                     <div key={idx} className="bg-white border border-gray-100 rounded-[56px] p-10 shadow-sm space-y-6 relative group">
-                      <button onClick={() => setActivities(activities.filter((_, i) => i !== idx))} className="absolute top-10 right-10 text-gray-300 hover:text-red-500 font-bold text-[10px] uppercase tracking-widest transition-colors">DELETE</button>
+                      <button onClick={(e) => { e.stopPropagation(); setActivities(activities.filter((_, i) => i !== idx)); }} className="absolute top-10 right-10 text-gray-300 hover:text-red-500 font-bold text-[10px] uppercase tracking-widest transition-colors">DELETE</button>
                       <div className="space-y-3">
                         <label className="text-[10px] font-black uppercase text-gray-400 tracking-widest">ACTIVITY NAME</label>
                         <input className="text-xl font-black w-full bg-gray-50 rounded-2xl px-6 py-4 border-none outline-none" value={act.title} onChange={e => {
@@ -540,7 +540,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
                   {videos.map((vid, idx) => (
                     <div key={idx} className="bg-white border border-gray-100 rounded-[56px] p-10 shadow-sm space-y-6 relative group">
-                      <button onClick={() => setVideos(videos.filter((_, i) => i !== idx))} className="absolute top-10 right-10 text-gray-300 hover:text-red-500 font-bold text-[10px] uppercase tracking-widest transition-colors">REMOVE</button>
+                      <button onClick={(e) => { e.stopPropagation(); setVideos(videos.filter((_, i) => i !== idx)); }} className="absolute top-10 right-10 text-gray-300 hover:text-red-500 font-bold text-[10px] uppercase tracking-widest transition-colors">REMOVE</button>
                       <div className="space-y-3">
                         <label className="text-[10px] font-black uppercase text-gray-400 tracking-widest">VIDEO TITLE</label>
                         <input className="text-sm font-bold w-full bg-gray-50 rounded-2xl px-6 py-4 border-none outline-none" value={vid.title} onChange={e => {
@@ -563,7 +563,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
                 <div className="flex items-center justify-between">
                   <SectionHeader title="Attachments & Resources" />
                   <label className="bg-[#EF4E92] text-white px-8 py-3 rounded-full text-xs font-black uppercase tracking-widest shadow-lg hover:bg-[#EF4E92]/90 transition-all cursor-pointer">
-                    + UPLOAD FILE
+                    + ADD FILE LINK
                     <input type="file" className="hidden" onChange={handleFileUpload} />
                   </label>
                 </div>
