@@ -57,6 +57,23 @@ const SubSectionCard: React.FC<SubSectionCardProps> = ({
   </div>
 );
 
+// Standard Template for New Lessons
+const DEFAULT_LESSON_TEMPLATE: LessonContentStructure = {
+  read: [
+    { id: 'tpl-r1', title: 'Bible Text', content: '' },
+    { id: 'tpl-r2', title: 'Memory Verse', content: '' }
+  ],
+  teach: [
+    { id: 'tpl-t1', title: 'Big Picture', content: '' },
+    { id: 'tpl-t2', title: 'Teach the Story', content: '' },
+    { id: 'tpl-t3', title: 'Gospel Connection', content: '' }
+  ],
+  engage: [
+    { id: 'tpl-e1', title: 'Discussion', content: '' },
+    { id: 'tpl-e2', title: 'Crafts', content: '' }
+  ]
+};
+
 interface AdminDashboardProps {
   user: Profile;
   onLogout: () => void;
@@ -202,12 +219,15 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
       title: '', summary: '', content: '', category: 'HISTORY', series: '', grade_min: 1, grade_max: 5, tags: [], status: LessonStatus.DRAFT 
     });
     
-    // Start with empty arrays to prevent phantom placeholders
-    setStructure({
-      read: [],
-      teach: [],
-      engage: []
-    });
+    // Apply Standard Content Template for NEW lessons
+    // We generate fresh IDs for each card to ensure they are unique
+    const freshTemplate: LessonContentStructure = {
+      read: DEFAULT_LESSON_TEMPLATE.read.map(item => ({ ...item, id: Math.random().toString(36).substr(2, 9) })),
+      teach: DEFAULT_LESSON_TEMPLATE.teach.map(item => ({ ...item, id: Math.random().toString(36).substr(2, 9) })),
+      engage: DEFAULT_LESSON_TEMPLATE.engage.map(item => ({ ...item, id: Math.random().toString(36).substr(2, 9) }))
+    };
+    
+    setStructure(freshTemplate);
     
     setActivities([]);
     setVideos([]);
