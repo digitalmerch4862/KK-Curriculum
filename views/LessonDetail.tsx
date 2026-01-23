@@ -28,7 +28,7 @@ const getGoogleDriveLinks = (url: string) => {
 const LessonDetail: React.FC<LessonDetailProps> = ({ lessonId, user, onBack }) => {
   const [lesson, setLesson] = useState<Lesson | null>(null);
   const [completed, setCompleted] = useState(false);
-  const [activeTab, setActiveTab] = useState<'overview' | 'text' | 'activities' | 'media'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'activities' | 'media'>('overview');
   const [loading, setLoading] = useState(true);
   
   // Modal states
@@ -88,7 +88,7 @@ const LessonDetail: React.FC<LessonDetailProps> = ({ lessonId, user, onBack }) =
         </div>
       )}
 
-      <header className="sticky top-0 z-50 bg-white/90 backdrop-blur-md border-b border-gray-50 px-4 md:px-8 py-3 md:py-4 flex items-center justify-between">
+      <header className="sticky top-0 z-50 bg-white border-b border-gray-50 px-4 md:px-8 py-3 md:py-4 flex items-center justify-between">
         <button onClick={onBack} className="p-2 hover:bg-gray-100 rounded-full transition-colors shrink-0">
           <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M15 19l-7-7 7-7" /></svg>
         </button>
@@ -110,13 +110,14 @@ const LessonDetail: React.FC<LessonDetailProps> = ({ lessonId, user, onBack }) =
         </button>
       </header>
 
-      <main className="max-w-6xl mx-auto px-6 py-8 md:py-12">
-        <div className="flex border-b border-gray-100 mb-8 md:mb-12 overflow-x-auto whitespace-nowrap scrollbar-hide gap-4 md:gap-8">
-          {(['overview', 'text', 'activities', 'media'] as const).map(tab => (
+      <main className="max-w-6xl mx-auto">
+        {/* Sticky Tab Navigation Bar */}
+        <div className="sticky top-[57px] md:top-[73px] z-40 bg-white border-b border-gray-100 px-6 py-2 md:py-4 overflow-x-auto whitespace-nowrap scrollbar-hide flex gap-4 md:gap-8">
+          {(['overview', 'activities', 'media'] as const).map(tab => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
-              className={`pb-4 text-[10px] md:text-xs font-black uppercase tracking-[0.2em] transition-all border-b-2 ${
+              className={`pb-2 md:pb-3 text-[10px] md:text-xs font-black uppercase tracking-[0.2em] transition-all border-b-2 ${
                 activeTab === tab ? 'border-[#EF4E92] text-[#EF4E92]' : 'border-transparent text-gray-400 hover:text-black'
               }`}
             >
@@ -125,27 +126,21 @@ const LessonDetail: React.FC<LessonDetailProps> = ({ lessonId, user, onBack }) =
           ))}
         </div>
 
-        <div className="animate-in fade-in slide-in-from-bottom-6 duration-700">
+        <div className="px-6 py-8 md:py-12 animate-in fade-in slide-in-from-bottom-6 duration-700">
           {activeTab === 'overview' && (
-            <div className="max-w-4xl mx-auto">
-              <section className="space-y-6">
+            <div className="space-y-16">
+              <section className="max-w-4xl mx-auto space-y-6">
                 <h2 className="text-3xl md:text-5xl font-black text-gray-900 tracking-tighter leading-tight">{lesson.title}</h2>
                 <div className="flex flex-wrap gap-2">
                   <span className="bg-gray-100 px-4 py-1.5 rounded-full text-[10px] font-black text-gray-500 uppercase tracking-widest">Grades {lesson.grade_min}-{lesson.grade_max}</span>
                   <span className="bg-pink-50 px-4 py-1.5 rounded-full text-[10px] font-black text-[#EF4E92] uppercase tracking-widest">{lesson.category}</span>
                 </div>
-                <div className="relative p-8 md:p-12 bg-[#F8FAFC] rounded-[48px] border border-gray-100 shadow-sm">
-                   <div className="absolute top-8 left-6 w-1 h-12 bg-[#EF4E92] rounded-full"></div>
-                   <p className="text-xl md:text-2xl text-gray-600 leading-relaxed font-medium italic">
-                    "{lesson.summary}"
-                  </p>
-                </div>
               </section>
-            </div>
-          )}
 
-          {activeTab === 'text' && (
-            <LessonTextTab content={lesson.content} />
+              <div className="border-t border-gray-50 pt-16">
+                <LessonTextTab content={lesson.content} />
+              </div>
+            </div>
           )}
 
           {activeTab === 'activities' && (
