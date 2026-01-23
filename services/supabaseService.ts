@@ -45,7 +45,8 @@ export const db = {
     async upsert(
       lesson: Partial<Lesson>, 
       activities?: Partial<LessonActivity>[], 
-      videos?: Partial<LessonVideo>[]
+      videos?: Partial<LessonVideo>[],
+      attachments?: Partial<Attachment>[]
     ) {
       const { 
         id, 
@@ -106,6 +107,26 @@ export const db = {
         }
       }
 
+      if (attachments && lessonData) {
+        const { error: daError } = await supabase.from('attachments').delete().eq('lesson_id', lessonData.id);
+        if (daError) handleSupabaseError(daError, 'cleaning up old attachments');
+
+        if (attachments.length > 0) {
+          const attachmentsToInsert = attachments.map((at, i) => {
+            const { id: _, lesson_id: __, created_at: ___, ...rest } = at;
+            return {
+              ...rest,
+              lesson_id: lessonData.id,
+              sort_order: i,
+              type: rest.type || 'pdf',
+              size_bytes: rest.size_bytes || 0
+            };
+          });
+          const { error: atError } = await supabase.from('attachments').insert(attachmentsToInsert);
+          if (atError) handleSupabaseError(atError, 'saving attachments');
+        }
+      }
+
       return lessonData;
     },
 
@@ -126,7 +147,7 @@ export const db = {
       return data;
     },
     async remove(id: string, storagePath: string) {
-      if (storagePath) {
+      if (storagePath && !storagePath.startsWith('http')) {
         const { error: sError } = await supabase.storage.from('lesson-assets').remove([storagePath]);
         if (sError) console.warn("Storage removal failed", sError);
       }

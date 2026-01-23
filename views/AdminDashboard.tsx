@@ -87,7 +87,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
 
   const [activities, setActivities] = useState<Partial<LessonActivity>[]>([]);
   const [videos, setVideos] = useState<Partial<LessonVideo>[]>([]);
-  const [attachments, setAttachments] = useState<Attachment[]>([]);
+  const [attachments, setAttachments] = useState<Partial<Attachment>[]>([]);
   const [loading, setLoading] = useState(false);
   const [isCategorizing, setIsCategorizing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -249,7 +249,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
         delete payload.id;
       }
 
-      await db.lessons.upsert(payload, activities, videos);
+      await db.lessons.upsert(payload, activities, videos, attachments);
       alert(`Lesson successfully ${status === LessonStatus.PUBLISHED ? 'published' : 'saved as draft'}!`);
       setEditingId(null);
       fetchLessons();
@@ -322,39 +322,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
       ...prev,
       [box]: prev[box].filter(s => s.id !== id)
     }));
-  };
-
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file || !editingId || editingId === 'new') return;
-    
-    setLoading(true);
-    try {
-      const result = await db.storage.upload(file);
-      const attachment = await db.attachments.add({
-        lesson_id: editingId,
-        name: file.name,
-        type: file.type.includes('pdf') ? 'pdf' : 'image',
-        storage_path: result.path,
-        size_bytes: file.size,
-        sort_order: attachments.length
-      });
-      setAttachments([...attachments, attachment]);
-    } catch (e: any) {
-      alert("Upload failed: " + e.message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const removeAttachment = async (id: string, path: string) => {
-    if (!window.confirm("Delete this attachment?")) return;
-    try {
-      await db.attachments.remove(id, path);
-      setAttachments(attachments.filter(a => a.id !== id));
-    } catch (e: any) {
-      alert("Failed to remove attachment");
-    }
   };
 
   return (
@@ -562,21 +529,44 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
               <div className="space-y-8">
                 <div className="flex items-center justify-between">
                   <SectionHeader title="Attachments & Resources" />
-                  <label className="bg-[#EF4E92] text-white px-8 py-3 rounded-full text-xs font-black uppercase tracking-widest shadow-lg hover:bg-[#EF4E92]/90 transition-all cursor-pointer">
+                  <button 
+                    onClick={() => setAttachments([...attachments, { name: '', storage_path: '', type: 'pdf', size_bytes: 0 }])} 
+                    className="bg-[#EF4E92] text-white px-8 py-3 rounded-full text-xs font-black uppercase tracking-widest shadow-lg hover:bg-[#EF4E92]/90 transition-all"
+                  >
                     + ADD FILE LINK
-                    <input type="file" className="hidden" onChange={handleFileUpload} />
-                  </label>
+                  </button>
                 </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                  {attachments.map((att) => (
-                    <div key={att.id} className="bg-white border border-gray-100 rounded-[32px] p-6 flex items-center justify-between group">
-                      <div className="flex-1 min-w-0 pr-4">
-                        <p className="font-black text-xs text-gray-800 uppercase tracking-wide truncate">{att.name}</p>
-                        <p className="text-[9px] text-gray-400 font-bold uppercase tracking-widest">{att.type} • {(att.size_bytes / 1024).toFixed(1)} KB</p>
-                      </div>
-                      <button onClick={() => removeAttachment(att.id, att.storage_path)} className="w-8 h-8 rounded-full bg-gray-50 flex items-center justify-center text-gray-300 hover:bg-red-50 hover:text-red-500 transition-all">
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M6 18L18 6M6 6l12 12" /></svg>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
+                  {attachments.map((att, idx) => (
+                    <div key={idx} className="bg-white border border-gray-100 rounded-[56px] p-10 shadow-sm space-y-6 relative group">
+                      <button 
+                        onClick={(e) => { e.stopPropagation(); setAttachments(attachments.filter((_, i) => i !== idx)); }} 
+                        className="absolute top-10 right-10 text-gray-300 hover:text-red-500 font-bold text-[10px] uppercase tracking-widest transition-colors"
+                      >
+                        REMOVE
                       </button>
+                      <div className="space-y-3">
+                        <label className="text-[10px] font-black uppercase text-gray-400 tracking-widest">FILE TITLE</label>
+                        <input 
+                          className="text-sm font-bold w-full bg-gray-50 rounded-2xl px-6 py-4 border-none outline-none" 
+                          value={att.name || ''} 
+                          onChange={e => {
+                            const n = [...attachments]; n[idx].name = e.target.value; setAttachments(n);
+                          }} 
+                          placeholder="Ex: Coloring Sheet"
+                        />
+                      </div>
+                      <div className="space-y-3">
+                        <label className="text-[10px] font-black uppercase text-gray-400 tracking-widest">FILE URL</label>
+                        <input 
+                          className="text-sm font-medium w-full bg-gray-50 rounded-2xl px-6 py-4 border-none outline-none text-blue-600" 
+                          value={att.storage_path || ''} 
+                          onChange={e => {
+                            const n = [...attachments]; n[idx].storage_path = e.target.value; setAttachments(n);
+                          }} 
+                          placeholder="https://..."
+                        />
+                      </div>
                     </div>
                   ))}
                 </div>
