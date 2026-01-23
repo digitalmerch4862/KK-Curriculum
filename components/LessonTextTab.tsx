@@ -1,13 +1,14 @@
 
 import React, { useMemo } from 'react';
 
-interface SubSection {
+// Exporting interfaces to be used by other components
+export interface SubSection {
   id: string;
   title: string;
   content: string;
 }
 
-interface Section {
+export interface Section {
   id: string;
   title: string;
   subsections: SubSection[];
@@ -16,6 +17,43 @@ interface Section {
 interface LessonTextTabProps {
   content: string;
 }
+
+/**
+ * Parses markdown-like content into a structured format for the lesson pathway.
+ * @param content The lesson content string.
+ * @returns An array of Section objects.
+ */
+export const parseContent = (content: string): Section[] => {
+  const parsed: Section[] = [];
+  const mainParts = content.split(/^# /m).filter(p => p.trim());
+
+  mainParts.forEach((part, index) => {
+    const lines = part.split('\n');
+    const title = lines[0].trim();
+    const sectionId = `section-${index}`;
+    
+    const subParts = part.slice(title.length).split(/^## /m).filter(p => p.trim());
+    
+    const subsections: SubSection[] = subParts.map((sub, sIdx) => {
+      const subLines = sub.split('\n');
+      const subTitle = subLines[0].trim();
+      const subContent = subLines.slice(1).join('\n').trim();
+      return {
+        id: `${sectionId}-sub-${sIdx}`,
+        title: subTitle,
+        content: subContent
+      };
+    });
+
+    parsed.push({
+      id: sectionId,
+      title,
+      subsections
+    });
+  });
+
+  return parsed;
+};
 
 const getIcon = (title: string) => {
   const t = title.toLowerCase();
@@ -76,37 +114,7 @@ const getIcon = (title: string) => {
 };
 
 const LessonTextTab: React.FC<LessonTextTabProps> = ({ content }) => {
-  const sections = useMemo(() => {
-    const parsed: Section[] = [];
-    const mainParts = content.split(/^# /m).filter(p => p.trim());
-
-    mainParts.forEach((part, index) => {
-      const lines = part.split('\n');
-      const title = lines[0].trim();
-      const sectionId = `section-${index}`;
-      
-      const subParts = part.slice(title.length).split(/^## /m).filter(p => p.trim());
-      
-      const subsections: SubSection[] = subParts.map((sub, sIdx) => {
-        const subLines = sub.split('\n');
-        const subTitle = subLines[0].trim();
-        const subContent = subLines.slice(1).join('\n').trim();
-        return {
-          id: `${sectionId}-sub-${sIdx}`,
-          title: subTitle,
-          content: subContent
-        };
-      });
-
-      parsed.push({
-        id: sectionId,
-        title,
-        subsections
-      });
-    });
-
-    return parsed;
-  }, [content]);
+  const sections = useMemo(() => parseContent(content), [content]);
 
   const renderFormattedContent = (text: string) => {
     return text.split('\n\n').map((paragraph, pIdx) => {
@@ -126,95 +134,41 @@ const LessonTextTab: React.FC<LessonTextTabProps> = ({ content }) => {
     });
   };
 
-  const scrollTo = (id: string) => {
-    const element = document.getElementById(id);
-    if (element) {
-      const offset = 120;
-      const bodyRect = document.body.getBoundingClientRect().top;
-      const elementRect = element.getBoundingClientRect().top;
-      const elementPosition = elementRect - bodyRect;
-      const offsetPosition = elementPosition - offset;
-
-      window.scrollTo({
-        top: offsetPosition,
-        behavior: 'smooth'
-      });
-    }
-  };
-
   return (
-    <div className="flex flex-col md:flex-row gap-12 relative animate-in fade-in slide-in-from-bottom-4 duration-500">
-      <aside className="w-full md:w-64 shrink-0">
-        <div className="sticky top-32 space-y-8">
-          <div>
-            <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-400 mb-6">Lesson Pathway</h4>
-            <nav className="space-y-1">
-              {sections.map((section) => (
-                <div key={section.id} className="space-y-1 mb-4">
-                  <button
-                    onClick={() => scrollTo(section.id)}
-                    className="block w-full text-left text-[11px] font-black uppercase tracking-wider text-[#EF4E92] hover:text-black transition-colors py-1"
-                  >
-                    {section.title}
-                  </button>
-                  <div className="pl-3 border-l-2 border-gray-100 space-y-1">
-                    {section.subsections.map((sub) => (
-                      <button
-                        key={sub.id}
-                        onClick={() => scrollTo(sub.id)}
-                        className="block w-full text-left text-[11px] font-medium text-gray-400 hover:text-[#EF4E92] transition-colors py-0.5 truncate"
-                      >
-                        {sub.title}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              ))}
-            </nav>
-          </div>
-          <div className="hidden md:block p-6 bg-gray-50 rounded-[32px] border border-gray-100">
-            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest leading-relaxed">
-              Tip: Review each card thoroughly before teaching.
-            </p>
-          </div>
-        </div>
-      </aside>
-
-      <div className="flex-1 max-w-3xl">
-        {sections.map((section) => (
-          <div key={section.id} id={section.id} className="mb-12">
-            {/* Section Divider */}
-            <div className="flex items-center gap-6 mb-10">
+    <div className="space-y-16 animate-in fade-in slide-in-from-bottom-4 duration-500">
+      {sections.map((section) => (
+        <div key={section.id} id={section.id} className="scroll-mt-32">
+          {/* Section Divider */}
+          <div className="flex items-center gap-6 mb-10">
                <h2 className="shrink-0 text-sm font-black uppercase tracking-[0.3em] text-[#EF4E92]">
                 {section.title}
               </h2>
-              <div className="flex-1 h-px bg-gray-100"></div>
-            </div>
-            
-            <div className="space-y-6">
-              {section.subsections.map((sub) => (
-                <section 
-                  key={sub.id} 
-                  id={sub.id} 
-                  className="bg-white rounded-[40px] p-8 md:p-10 shadow-sm border border-gray-100 hover:shadow-md transition-shadow group scroll-mt-32"
-                >
-                  <div className="flex items-center gap-4 mb-8">
-                    <div className="w-12 h-12 rounded-2xl bg-pink-50 text-[#EF4E92] flex items-center justify-center transition-colors group-hover:bg-[#EF4E92] group-hover:text-white">
-                      {getIcon(sub.title)}
-                    </div>
-                    <h3 className="text-2xl font-black text-gray-900 tracking-tight">
-                      {sub.title}
-                    </h3>
-                  </div>
-                  <div className="text-lg md:text-xl font-serif text-gray-800 leading-relaxed selection:bg-pink-100">
-                    {renderFormattedContent(sub.content)}
-                  </div>
-                </section>
-              ))}
-            </div>
+            <div className="flex-1 h-px bg-gray-100"></div>
           </div>
-        ))}
-      </div>
+          
+          <div className="space-y-6">
+            {section.subsections.map((sub) => (
+              <section 
+                key={sub.id} 
+                id={sub.id} 
+                className="bg-white rounded-[40px] p-8 md:p-10 shadow-sm border border-gray-100 hover:shadow-md transition-shadow group scroll-mt-32"
+              >
+                <div className="flex items-center gap-4 mb-8">
+                  <div className="w-12 h-12 rounded-2xl bg-pink-50 text-[#EF4E92] flex items-center justify-center transition-colors group-hover:bg-[#EF4E92] group-hover:text-white">
+                    {getIcon(sub.title)}
+                  </div>
+                  <h3 className="text-2xl font-black text-gray-900 tracking-tight">
+                    {sub.title}
+                  </h3>
+                </div>
+                <div className="text-lg md:text-xl font-serif text-gray-800 leading-relaxed selection:bg-pink-100">
+                  {renderFormattedContent(sub.content)}
+                </div>
+              </section>
+            ))}
+          </div>
+        </div>
+      ))}
     </div>
   );
 };

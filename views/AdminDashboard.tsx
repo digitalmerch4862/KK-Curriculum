@@ -550,11 +550,27 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
 
               <div className="space-y-8">
                 <SectionHeader title="Interactive Activities" />
-                <button onClick={() => setActivities([...activities, { title: '', instructions: '', supplies: [], duration_minutes: 15 }])} className="bg-[#EF4E92] text-white px-8 py-3 rounded-full text-xs font-black uppercase tracking-widest shadow-lg hover:bg-[#EF4E92]/90 transition-all">+ ADD ACTIVITY</button>
+                <button 
+                  onClick={() => setActivities([...activities, { title: '', instructions: '', supplies: [], duration_minutes: 15 }])} 
+                  className="bg-[#EF4E92] text-white px-8 py-4 rounded-full text-xs font-black uppercase tracking-widest shadow-lg hover:bg-[#EF4E92]/90 transition-all flex items-center gap-2"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M12 9v6m3-3H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  ADD ACTIVITY
+                </button>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
                   {activities.map((act, idx) => (
                     <div key={idx} className="bg-white border border-gray-100 rounded-[56px] p-10 shadow-sm space-y-6 relative">
-                      <button onClick={() => setActivities(activities.filter((_, i) => i !== idx))} className="absolute top-10 right-10 text-gray-300 hover:text-red-500 font-bold text-[10px] uppercase tracking-widest transition-colors">DELETE</button>
+                      <button 
+                        onClick={() => setActivities(activities.filter((_, i) => i !== idx))} 
+                        className="absolute top-10 right-10 text-gray-300 hover:text-red-500 transition-colors"
+                        aria-label="Remove activity"
+                      >
+                        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        </svg>
+                      </button>
                       <input placeholder="Activity Title" className="text-xl font-black w-full bg-gray-50 rounded-2xl px-6 py-4 border-none outline-none" value={act.title} onChange={e => {
                         const n = [...activities]; n[idx].title = e.target.value; setActivities(n);
                       }} />
@@ -572,7 +588,15 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
                   {videos.map((vid, idx) => (
                     <div key={idx} className="bg-white border border-gray-100 rounded-[56px] p-10 shadow-sm space-y-6 relative">
-                      <button onClick={() => setVideos(videos.filter((_, i) => i !== idx))} className="absolute top-10 right-10 text-gray-300 hover:text-red-500 font-bold text-[10px] uppercase tracking-widest transition-colors">REMOVE</button>
+                      <button 
+                        onClick={() => setVideos(videos.filter((_, i) => i !== idx))} 
+                        className="absolute top-10 right-10 text-gray-300 hover:text-red-500 transition-colors"
+                        aria-label="Remove video"
+                      >
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        </svg>
+                      </button>
                       <input placeholder="Video Title" className="text-sm font-bold w-full bg-gray-50 rounded-2xl px-6 py-4 border-none outline-none" value={vid.title} onChange={e => {
                         const n = [...videos]; n[idx].title = e.target.value; setVideos(n);
                       }} />
@@ -590,7 +614,15 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
                   {attachments.map((att, idx) => (
                     <div key={idx} className="bg-white border border-gray-100 rounded-[56px] p-10 shadow-sm space-y-6 relative">
-                      <button onClick={() => setAttachments(attachments.filter((_, i) => i !== idx))} className="absolute top-10 right-10 text-gray-300 hover:text-red-500 font-bold text-[10px] uppercase tracking-widest transition-colors">REMOVE</button>
+                      <button 
+                        onClick={() => setAttachments(attachments.filter((_, i) => i !== idx))} 
+                        className="absolute top-10 right-10 text-gray-300 hover:text-red-500 transition-colors"
+                        aria-label="Remove resource"
+                      >
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        </svg>
+                      </button>
                       <input placeholder="Resource Name (e.g. Coloring Sheet)" className="text-sm font-bold w-full bg-gray-50 rounded-2xl px-6 py-4 border-none outline-none" value={att.name || ''} onChange={e => {
                         const n = [...attachments]; n[idx].name = e.target.value; setAttachments(n);
                       }} />
