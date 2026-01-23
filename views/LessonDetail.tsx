@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { db } from '../services/supabaseService.ts';
-import { Lesson, Profile } from '../types.ts';
+import { Lesson, Profile, Attachment } from '../types.ts';
 import ActivityCard from '../components/ActivityCard.tsx';
 import VideoEmbed from '../components/VideoEmbed.tsx';
 import LessonTextTab from '../components/LessonTextTab.tsx';
@@ -12,11 +12,27 @@ interface LessonDetailProps {
   onBack: () => void;
 }
 
+// Utility to handle Google Drive URLs
+const getGoogleDriveLinks = (url: string) => {
+  if (!url) return null;
+  const match = url.match(/\/d\/([a-zA-Z0-9_-]+)/);
+  const fileId = match ? match[1] : null;
+  if (!fileId) return { preview: url, download: url, isGoogleDrive: false };
+  return {
+    preview: `https://drive.google.com/file/d/${fileId}/preview`,
+    download: `https://drive.google.com/uc?export=download&id=${fileId}`,
+    isGoogleDrive: true
+  };
+};
+
 const LessonDetail: React.FC<LessonDetailProps> = ({ lessonId, user, onBack }) => {
   const [lesson, setLesson] = useState<Lesson | null>(null);
   const [completed, setCompleted] = useState(false);
   const [activeTab, setActiveTab] = useState<'overview' | 'text' | 'activities' | 'media'>('overview');
   const [loading, setLoading] = useState(true);
+  
+  // Modal states
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
 
   useEffect(() => {
     const fetch = async () => {
@@ -47,6 +63,31 @@ const LessonDetail: React.FC<LessonDetailProps> = ({ lessonId, user, onBack }) =
 
   return (
     <div className="min-h-screen bg-white">
+      {/* PREVIEW MODAL */}
+      {previewUrl && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 md:p-10 bg-black/80 backdrop-blur-sm animate-in fade-in duration-300">
+          <div className="bg-white w-full h-full max-w-6xl rounded-[40px] shadow-2xl relative overflow-hidden flex flex-col">
+            <div className="p-6 flex items-center justify-between border-b border-gray-100">
+              <h3 className="font-black text-xs uppercase tracking-widest text-gray-400">Resource Preview</h3>
+              <button 
+                onClick={() => setPreviewUrl(null)} 
+                className="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center text-gray-500 hover:bg-[#EF4E92] hover:text-white transition-all shadow-sm"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M6 18L18 6M6 6l12 12" /></svg>
+              </button>
+            </div>
+            <div className="flex-1 bg-gray-50">
+              <iframe 
+                src={previewUrl} 
+                className="w-full h-full border-none" 
+                allow="autoplay"
+                title="Document Preview"
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
       <header className="sticky top-0 z-50 bg-white/90 backdrop-blur-md border-b border-gray-50 px-4 md:px-8 py-3 md:py-4 flex items-center justify-between">
         <button onClick={onBack} className="p-2 hover:bg-gray-100 rounded-full transition-colors shrink-0">
           <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M15 19l-7-7 7-7" /></svg>
@@ -93,7 +134,7 @@ const LessonDetail: React.FC<LessonDetailProps> = ({ lessonId, user, onBack }) =
                   <span className="bg-gray-100 px-4 py-1.5 rounded-full text-[10px] font-black text-gray-500 uppercase tracking-widest">Grades {lesson.grade_min}-{lesson.grade_max}</span>
                   <span className="bg-pink-50 px-4 py-1.5 rounded-full text-[10px] font-black text-[#EF4E92] uppercase tracking-widest">{lesson.category}</span>
                 </div>
-                <div className="relative p-8 md:p-12 bg-[#F8FAFC] rounded-[48px] border border-gray-50">
+                <div className="relative p-8 md:p-12 bg-[#F8FAFC] rounded-[48px] border border-gray-100 shadow-sm">
                    <div className="absolute top-8 left-6 w-1 h-12 bg-[#EF4E92] rounded-full"></div>
                    <p className="text-xl md:text-2xl text-gray-600 leading-relaxed font-medium italic">
                     "{lesson.summary}"
@@ -147,20 +188,41 @@ const LessonDetail: React.FC<LessonDetailProps> = ({ lessonId, user, onBack }) =
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   {lesson.attachments?.length ? (
-                    lesson.attachments.map(att => (
-                      <div 
-                        key={att.id}
-                        className="p-6 bg-white border border-gray-100 rounded-[32px] flex items-center justify-between hover:border-[#EF4E92] transition-all shadow-sm group cursor-pointer"
-                      >
-                        <div className="flex-1 min-w-0 pr-4">
-                          <p className="font-black text-sm truncate text-gray-900 uppercase tracking-wide">{att.name}</p>
-                          <p className="text-[10px] text-gray-400 uppercase font-black tracking-widest">{att.type}</p>
+                    lesson.attachments.map(att => {
+                      const driveLinks = getGoogleDriveLinks(att.storage_path);
+                      return (
+                        <div 
+                          key={att.id}
+                          className="p-6 bg-white border border-gray-100 rounded-[32px] flex items-center justify-between hover:border-[#EF4E92] transition-all shadow-sm group"
+                        >
+                          <div className="flex-1 min-w-0 pr-4">
+                            <p className="font-black text-sm truncate text-gray-900 uppercase tracking-wide">{att.name}</p>
+                            <p className="text-[10px] text-gray-400 uppercase font-black tracking-widest">{att.type || 'DOCUMENT'}</p>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            {/* VIEW BUTTON */}
+                            <button 
+                              onClick={() => setPreviewUrl(driveLinks?.preview || att.storage_path)}
+                              className="w-10 h-10 bg-gray-50 rounded-2xl flex items-center justify-center text-gray-400 hover:bg-[#EF4E92] hover:text-white transition-all shadow-sm"
+                              title="View & Print"
+                            >
+                              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
+                            </button>
+                            {/* DOWNLOAD BUTTON */}
+                            <a 
+                              href={driveLinks?.download || att.storage_path}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="w-10 h-10 bg-gray-50 rounded-2xl flex items-center justify-center text-gray-400 hover:bg-[#EF4E92] hover:text-white transition-all shadow-sm"
+                              title="Download"
+                              download
+                            >
+                              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+                            </a>
+                          </div>
                         </div>
-                        <div className="w-10 h-10 bg-gray-50 rounded-2xl flex items-center justify-center text-gray-400 group-hover:bg-[#EF4E92] group-hover:text-white transition-all">
-                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
-                        </div>
-                      </div>
-                    ))
+                      );
+                    })
                   ) : (
                     <div className="col-span-full py-12 border-2 border-dashed border-gray-100 rounded-[40px] text-center text-gray-300 font-black text-[10px] uppercase tracking-widest">No downloadable materials</div>
                   )}
