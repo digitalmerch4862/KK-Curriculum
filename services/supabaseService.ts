@@ -112,14 +112,13 @@ export const db = {
         if (daError) handleSupabaseError(daError, 'cleaning up old attachments');
 
         if (attachments.length > 0) {
-          const attachmentsToInsert = attachments.map((at, i) => {
-            const { id: _, lesson_id: __, created_at: ___, ...rest } = at;
+          const attachmentsToInsert = attachments.map((at) => {
+            // Strictly include ONLY the fields that exist in the schema
             return {
-              ...rest,
-              lesson_id: lessonData.id,
-              sort_order: i,
-              type: rest.type || 'pdf',
-              size_bytes: rest.size_bytes || 0
+              name: at.name,
+              storage_path: at.storage_path,
+              lesson_id: lessonData.id
+              // Explicitly omitting: sort_order, size_bytes, type, created_at, id
             };
           });
           const { error: atError } = await supabase.from('attachments').insert(attachmentsToInsert);
@@ -138,9 +137,15 @@ export const db = {
 
   attachments: {
     async add(attachment: Omit<Attachment, 'id' | 'created_at'>) {
+      // Stripping all invalid fields from payload
+      const payload = {
+        name: attachment.name,
+        storage_path: attachment.storage_path,
+        lesson_id: attachment.lesson_id
+      };
       const { data, error } = await supabase
         .from('attachments')
-        .insert(attachment)
+        .insert(payload)
         .select()
         .single();
       if (error) handleSupabaseError(error, 'adding attachment record');

@@ -1,4 +1,5 @@
 
+
 export enum UserRole {
   ADMIN = 'admin',
   TEACHER = 'teacher'
@@ -74,8 +75,8 @@ export interface Attachment {
   name: string;
   type: 'pdf' | 'image' | 'video' | 'audio' | 'doc';
   storage_path: string;
-  size_bytes: number;
-  sort_order: number;
+  size_bytes?: number;
+  sort_order?: number;
   created_at: string;
 }
 
