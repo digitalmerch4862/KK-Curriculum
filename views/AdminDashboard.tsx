@@ -26,29 +26,33 @@ const SubSectionCard: React.FC<SubSectionCardProps> = ({
   onDelete, 
   placeholder 
 }) => (
-  <div className="bg-[#F9FAFB] p-6 md:p-8 rounded-[40px] space-y-4 relative group border border-transparent hover:border-pink-100 transition-all shadow-sm">
+  <div className="bg-white p-8 md:p-10 rounded-[40px] relative shadow-sm border-2 border-transparent hover:border-pink-50 transition-all group flex flex-col min-h-[220px]">
     <button 
       onClick={onDelete} 
-      className="absolute top-6 right-8 text-gray-300 hover:text-red-500 transition-opacity opacity-0 group-hover:opacity-100"
+      className="absolute top-6 right-8 text-gray-200 hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100 z-10"
     >
-      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M6 18L18 6M6 6l12 12" /></svg>
+      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M6 18L18 6M6 6l12 12" />
+      </svg>
     </button>
-    <div className="pr-10">
+    
+    <div className="mb-4">
       <input 
-        className="bg-transparent border-none font-black text-sm w-full outline-none text-gray-800 uppercase tracking-wide" 
-        value={sub.title} 
-        onChange={e => onUpdate({ title: e.target.value })} 
+        type="text"
+        className="w-full bg-transparent border-none text-xs font-black uppercase tracking-widest text-gray-400 focus:text-[#003882] outline-none"
+        value={sub.title}
+        onChange={e => onUpdate({ title: e.target.value })}
+        placeholder="Section Label"
       />
     </div>
-    <div className="bg-white rounded-[24px] p-2 border border-gray-100">
-      <textarea 
-        rows={10} 
-        placeholder={placeholder} 
-        className="w-full bg-transparent border-none p-4 text-sm leading-relaxed outline-none resize-none text-gray-600 font-medium" 
-        value={sub.content} 
-        onChange={e => onUpdate({ content: e.target.value })} 
-      />
-    </div>
+
+    <textarea 
+      rows={6} 
+      placeholder={placeholder} 
+      className="w-full bg-transparent border-none text-base leading-relaxed outline-none resize-none text-gray-600 font-medium flex-1 scrollbar-hide" 
+      value={sub.content} 
+      onChange={e => onUpdate({ content: e.target.value })} 
+    />
   </div>
 );
 
@@ -83,7 +87,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
   const [activities, setActivities] = useState<Partial<LessonActivity>[]>([]);
   const [videos, setVideos] = useState<Partial<LessonVideo>[]>([]);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
-  const [downloadLinks, setDownloadLinks] = useState<{name: string, url: string}[]>([]);
   const [loading, setLoading] = useState(false);
   const [isCategorizing, setIsCategorizing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -118,8 +121,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
         const content = lines.slice(1).join('\n').trim();
         return {
           id: Math.random().toString(36).substr(2, 9),
-          title: lines[0].trim(),
-          content: content
+          title: lines[0].trim() || 'Block',
+          content: content || ''
         };
       });
     });
@@ -158,7 +161,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
         setActivities(full.activities || []);
         setVideos(full.videos || []);
         setAttachments(full.attachments || []);
-        setDownloadLinks((full.attachments || []).map((at: Attachment) => ({ name: at.name, url: at.storage_path }))); 
         setGenerationHistory([]);
         setCurrentHistoryIndex(-1);
         window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -169,13 +171,12 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
   };
 
   const handleDelete = async (e: React.MouseEvent, id: string) => {
-    e.stopPropagation(); // CRITICAL: Stop propagation to prevent opening the editor
+    e.stopPropagation();
     if (!window.confirm("Are you sure you want to permanently delete this lesson? This action cannot be undone.")) return;
     
     setLoading(true);
     try {
       await db.lessons.delete(id);
-      // If we deleted the lesson currently being edited, close the editor
       if (editingId === id) {
         setEditingId(null);
       }
@@ -195,24 +196,23 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
     });
     setStructure({
       read: [
-        { id: '1', title: 'Bible Text', content: '' },
-        { id: '2', title: 'Memory Verse', content: '' }
+        { id: 'r1', title: 'Bible Text', content: '' },
+        { id: 'r2', title: 'Memory Verse', content: '' }
       ],
       teach: [
-        { id: '3', title: 'The Big Picture', content: '' },
-        { id: '4', title: 'Tell the Story', content: '' },
-        { id: '5', title: 'Gospel Connection', content: '' }
+        { id: 't1', title: 'Big Picture', content: '' },
+        { id: 't2', title: 'Teach the Story', content: '' },
+        { id: 't3', title: 'Gospel Connection', content: '' }
       ],
       engage: [
-        { id: '6', title: 'Discuss the Story', content: '' },
-        { id: '7', title: 'Activities', content: '' },
-        { id: '8', title: 'Crafts', content: '' }
+        { id: 'e1', title: 'Discussion', content: '' },
+        { id: 'e2', title: 'Activities', content: '' },
+        { id: 'e3', title: 'Crafts', content: '' }
       ]
     });
     setActivities([]);
     setVideos([]);
     setAttachments([]);
-    setDownloadLinks([]);
     setGenerationHistory([]);
     setCurrentHistoryIndex(-1);
     setAiGoal('');
@@ -306,7 +306,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
   const addSubSection = (box: keyof LessonContentStructure) => {
     setStructure(prev => ({
       ...prev,
-      [box]: [...prev[box], { id: Math.random().toString(36).substr(2, 9), title: 'New Sub-section', content: '' }]
+      [box]: [...prev[box], { id: Math.random().toString(36).substr(2, 9), title: 'New Label', content: '' }]
     }));
   };
 
@@ -322,6 +322,39 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
       ...prev,
       [box]: prev[box].filter(s => s.id !== id)
     }));
+  };
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !editingId || editingId === 'new') return;
+    
+    setLoading(true);
+    try {
+      const result = await db.storage.upload(file);
+      const attachment = await db.attachments.add({
+        lesson_id: editingId,
+        name: file.name,
+        type: file.type.includes('pdf') ? 'pdf' : 'image',
+        storage_path: result.path,
+        size_bytes: file.size,
+        sort_order: attachments.length
+      });
+      setAttachments([...attachments, attachment]);
+    } catch (e: any) {
+      alert("Upload failed: " + e.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const removeAttachment = async (id: string, path: string) => {
+    if (!window.confirm("Delete this attachment?")) return;
+    try {
+      await db.attachments.remove(id, path);
+      setAttachments(attachments.filter(a => a.id !== id));
+    } catch (e: any) {
+      alert("Failed to remove attachment");
+    }
   };
 
   return (
@@ -385,40 +418,22 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
                   <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">{l.category}</p>
                   <div className="flex items-center gap-2">
                     <span className={`text-[8px] font-black uppercase px-2 py-0.5 rounded-full ${l.status === LessonStatus.PUBLISHED ? 'bg-green-500 text-white' : 'bg-orange-500 text-white'}`}>{l.status}</span>
-                    
-                    {/* ACTION BUTTONS GROUP */}
                     <div className="flex items-center gap-2">
-                      {/* PENCIL EDIT BUTTON */}
                       <button 
                         type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleEdit(l.id);
-                        }}
-                        className="relative z-10 flex items-center justify-center w-8 h-8 border-[2px] border-gray-200 rounded-full bg-white text-gray-400 hover:text-white hover:bg-[#EF4E92] hover:border-[#EF4E92] transition-all shadow-sm"
-                        title="Edit Lesson"
+                        onClick={(e) => { e.stopPropagation(); handleEdit(l.id); }}
+                        className="flex items-center justify-center w-8 h-8 border-[2px] border-gray-200 rounded-full bg-white text-gray-400 hover:text-white hover:bg-[#EF4E92] transition-all shadow-sm"
                       >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-                        </svg>
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
                       </button>
-
-                      {/* TRASH DELETE BUTTON */}
                       <button 
                         type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleDelete(e, l.id);
-                        }}
-                        className="relative z-10 flex items-center justify-center w-8 h-8 border-[2px] border-gray-200 rounded-full bg-white text-gray-400 hover:text-white hover:bg-red-500 hover:border-red-500 transition-all shadow-sm"
-                        title="Delete Lesson"
+                        onClick={(e) => { e.stopPropagation(); handleDelete(e, l.id); }}
+                        className="flex items-center justify-center w-8 h-8 border-[2px] border-gray-200 rounded-full bg-white text-gray-400 hover:text-white hover:bg-red-500 transition-all shadow-sm"
                       >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                        </svg>
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                       </button>
                     </div>
-
                   </div>
                 </div>
               </div>
@@ -467,29 +482,106 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
                 </div>
               </div>
 
-              {/* LESSON BODY */}
+              {/* LESSON BODY - MATCHED TO SCREENSHOT */}
               <div className="space-y-8">
                 <SectionHeader title="The Lesson Body" />
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-10">
-                  {/* Columns for Read, Teach, Engage */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
                   {(['read', 'teach', 'engage'] as const).map((col, idx) => (
-                    <div key={col} className="bg-white border border-gray-100 rounded-[56px] p-10 shadow-sm flex flex-col min-h-[700px]">
-                      <div className="flex items-center justify-between mb-10">
-                        <div className="flex items-center gap-4">
-                          <div className={`w-10 h-10 rounded-full flex items-center justify-center font-black text-sm ${idx === 0 ? 'bg-pink-50 text-pink-500' : idx === 1 ? 'bg-blue-50 text-blue-500' : 'bg-purple-50 text-purple-500'}`}>{idx + 1}</div>
-                          <h4 className="font-black text-2xl text-gray-800 uppercase tracking-tight">{col}</h4>
-                        </div>
-                        <button onClick={() => addSubSection(col)} className="text-[#EF4E92] font-black text-[10px] uppercase tracking-widest">+ SUB</button>
+                    <div key={col} className="bg-gray-50/60 rounded-[64px] p-8 md:p-10 flex flex-col min-h-[600px] border border-gray-100/50">
+                      <div className="flex items-center justify-between mb-8 px-4">
+                        <h4 className="font-black text-xs md:text-sm text-[#003882] uppercase tracking-[0.2em]">{col}</h4>
+                        <button onClick={() => addSubSection(col)} className="text-gray-300 hover:text-[#EF4E92] transition-colors">
+                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M12 6v6m0 0v6m0-6h6m-6 0H6" /></svg>
+                        </button>
                       </div>
-                      <div className="space-y-8">
+                      <div className="space-y-6">
                         {structure[col].map(sub => (
-                          <SubSectionCard key={sub.id} sub={sub} onUpdate={updates => updateSubSection(col, sub.id, updates)} onDelete={() => deleteSubSection(col, sub.id)} placeholder={`Content for ${col}...`} />
+                          <SubSectionCard key={sub.id} sub={sub} onUpdate={updates => updateSubSection(col, sub.id, updates)} onDelete={() => deleteSubSection(col, sub.id)} placeholder={`Enter text for ${sub.title}...`} />
                         ))}
                       </div>
                     </div>
                   ))}
                 </div>
               </div>
+
+              {/* INTERACTIVE ACTIVITIES */}
+              <div className="space-y-8">
+                <div className="flex items-center justify-between">
+                  <SectionHeader title="Interactive Activities" />
+                  <button onClick={() => setActivities([...activities, { title: '', instructions: '', supplies: [], duration_minutes: 15 }])} className="bg-[#EF4E92] text-white px-8 py-3 rounded-full text-xs font-black uppercase tracking-widest shadow-lg hover:bg-[#EF4E92]/90 transition-all">+ ADD ACTIVITY</button>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
+                  {activities.map((act, idx) => (
+                    <div key={idx} className="bg-white border border-gray-100 rounded-[56px] p-10 shadow-sm space-y-6 relative group">
+                      <button onClick={() => setActivities(activities.filter((_, i) => i !== idx))} className="absolute top-10 right-10 text-gray-300 hover:text-red-500 font-bold text-[10px] uppercase tracking-widest transition-colors">DELETE</button>
+                      <div className="space-y-3">
+                        <label className="text-[10px] font-black uppercase text-gray-400 tracking-widest">ACTIVITY NAME</label>
+                        <input className="text-xl font-black w-full bg-gray-50 rounded-2xl px-6 py-4 border-none outline-none" value={act.title} onChange={e => {
+                          const n = [...activities]; n[idx].title = e.target.value; setActivities(n);
+                        }} />
+                      </div>
+                      <div className="space-y-3">
+                        <label className="text-[10px] font-black uppercase text-gray-400 tracking-widest">INSTRUCTIONS</label>
+                        <textarea className="w-full bg-gray-50 rounded-2xl p-6 text-sm min-h-[150px] resize-none outline-none font-medium leading-relaxed" value={act.instructions} onChange={e => {
+                          const n = [...activities]; n[idx].instructions = e.target.value; setActivities(n);
+                        }} />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* VIDEOS & MEDIA */}
+              <div className="space-y-8">
+                <div className="flex items-center justify-between">
+                  <SectionHeader title="Videos & Media" />
+                  <button onClick={() => setVideos([...videos, { title: '', url: '', provider: 'youtube' }])} className="bg-[#003882] text-white px-8 py-3 rounded-full text-xs font-black uppercase tracking-widest shadow-lg hover:bg-[#003882]/90 transition-all">+ ADD VIDEO LINK</button>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
+                  {videos.map((vid, idx) => (
+                    <div key={idx} className="bg-white border border-gray-100 rounded-[56px] p-10 shadow-sm space-y-6 relative group">
+                      <button onClick={() => setVideos(videos.filter((_, i) => i !== idx))} className="absolute top-10 right-10 text-gray-300 hover:text-red-500 font-bold text-[10px] uppercase tracking-widest transition-colors">REMOVE</button>
+                      <div className="space-y-3">
+                        <label className="text-[10px] font-black uppercase text-gray-400 tracking-widest">VIDEO TITLE</label>
+                        <input className="text-sm font-bold w-full bg-gray-50 rounded-2xl px-6 py-4 border-none outline-none" value={vid.title} onChange={e => {
+                          const n = [...videos]; n[idx].title = e.target.value; setVideos(n);
+                        }} />
+                      </div>
+                      <div className="space-y-3">
+                        <label className="text-[10px] font-black uppercase text-gray-400 tracking-widest">URL (YOUTUBE/VIMEO)</label>
+                        <input className="text-sm font-medium w-full bg-gray-50 rounded-2xl px-6 py-4 border-none outline-none text-blue-600" value={vid.url} onChange={e => {
+                          const n = [...videos]; n[idx].url = e.target.value; setVideos(n);
+                        }} />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* ATTACHMENTS & RESOURCES */}
+              <div className="space-y-8">
+                <div className="flex items-center justify-between">
+                  <SectionHeader title="Attachments & Resources" />
+                  <label className="bg-[#EF4E92] text-white px-8 py-3 rounded-full text-xs font-black uppercase tracking-widest shadow-lg hover:bg-[#EF4E92]/90 transition-all cursor-pointer">
+                    + UPLOAD FILE
+                    <input type="file" className="hidden" onChange={handleFileUpload} />
+                  </label>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {attachments.map((att) => (
+                    <div key={att.id} className="bg-white border border-gray-100 rounded-[32px] p-6 flex items-center justify-between group">
+                      <div className="flex-1 min-w-0 pr-4">
+                        <p className="font-black text-xs text-gray-800 uppercase tracking-wide truncate">{att.name}</p>
+                        <p className="text-[9px] text-gray-400 font-bold uppercase tracking-widest">{att.type} • {(att.size_bytes / 1024).toFixed(1)} KB</p>
+                      </div>
+                      <button onClick={() => removeAttachment(att.id, att.storage_path)} className="w-8 h-8 rounded-full bg-gray-50 flex items-center justify-center text-gray-300 hover:bg-red-50 hover:text-red-500 transition-all">
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M6 18L18 6M6 6l12 12" /></svg>
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
             </div>
           )}
         </div>
