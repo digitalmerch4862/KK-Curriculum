@@ -14,36 +14,40 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
-      <div className="w-full max-w-md bg-white rounded-3xl p-10 shadow-xl border border-gray-100">
-        <div className="text-center mb-10">
-          <div className="w-16 h-16 bg-[#EF4E92] rounded-2xl mx-auto flex items-center justify-center mb-4 shadow-lg shadow-pink-200">
-            <span className="text-white text-2xl font-bold">K</span>
-          </div>
-          <h1 className="text-2xl font-black mb-1">KingdomKids</h1>
-          <p className="text-gray-400 font-medium">Teacher Portal</p>
+      <div className="w-full max-w-md bg-white rounded-[48px] p-12 shadow-2xl border border-gray-100">
+        <div className="text-center mb-12">
+          <h1 className="text-3xl md:text-4xl font-black mb-1 text-[#EF4E92] uppercase tracking-tighter">
+            KINGDOM KIDS
+          </h1>
+          <p className="text-gray-400 font-black uppercase tracking-widest text-[10px]">
+            Faith Pathway
+          </p>
         </div>
 
         <div className="space-y-4">
-          <p className="text-center text-sm text-gray-500 mb-6">Choose your role to sign in</p>
+          <p className="text-center text-[10px] font-black uppercase tracking-widest text-gray-400 mb-8">
+            Sign in as
+          </p>
           {profiles.map(p => (
             <button
               key={p.id}
               onClick={() => onLogin(p)}
-              className="w-full py-4 px-6 rounded-2xl flex items-center justify-between border-2 border-[#EF4E92] text-[#EF4E92] hover:bg-[#EF4E92] hover:text-white transition-all group"
+              className="w-full py-5 px-8 rounded-3xl flex items-center justify-between border-2 border-[#EF4E92] text-[#EF4E92] hover:bg-[#EF4E92] hover:text-white transition-all group shadow-sm hover:shadow-lg active:scale-[0.98]"
             >
               <div className="text-left">
-                <p className="font-bold text-lg">{p.role === UserRole.ADMIN ? 'Administrator' : 'Teacher'}</p>
-                <p className="text-xs opacity-60">Demo as {p.name}</p>
+                <p className="font-black text-xl uppercase tracking-tight">
+                  {p.role === UserRole.ADMIN ? 'Administrator' : 'Teacher'}
+                </p>
               </div>
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-6 h-6 transform group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M14 5l7 7m0 0l-7 7m7-7H3" />
               </svg>
             </button>
           ))}
         </div>
         
-        <div className="mt-12 text-center text-xs text-gray-300">
-          KingdomKids Materials Management v1.0
+        <div className="mt-16 text-center text-[10px] font-black uppercase tracking-widest text-gray-200">
+          KKFP v1.0
         </div>
       </div>
     </div>

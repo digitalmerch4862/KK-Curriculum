@@ -128,18 +128,8 @@ const LessonDetail: React.FC<LessonDetailProps> = ({ lessonId, user, onBack }) =
 
         <div className="px-6 py-8 md:py-12 animate-in fade-in slide-in-from-bottom-6 duration-700">
           {activeTab === 'overview' && (
-            <div className="space-y-16">
-              <section className="max-w-4xl mx-auto space-y-6">
-                <h2 className="text-3xl md:text-5xl font-black text-gray-900 tracking-tighter leading-tight">{lesson.title}</h2>
-                <div className="flex flex-wrap gap-2">
-                  <span className="bg-gray-100 px-4 py-1.5 rounded-full text-[10px] font-black text-gray-500 uppercase tracking-widest">Grades {lesson.grade_min}-{lesson.grade_max}</span>
-                  <span className="bg-pink-50 px-4 py-1.5 rounded-full text-[10px] font-black text-[#EF4E92] uppercase tracking-widest">{lesson.category}</span>
-                </div>
-              </section>
-
-              <div className="border-t border-gray-50 pt-16">
-                <LessonTextTab content={lesson.content} />
-              </div>
+            <div className="animate-in fade-in duration-500">
+              <LessonTextTab content={lesson.content} />
             </div>
           )}
 

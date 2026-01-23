@@ -42,7 +42,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
     <div className="min-h-screen bg-white">
       <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-gray-100 px-6 py-4 flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-xl md:text-2xl font-black text-gray-900">Hello, {user.name} 👋</h1>
+          <h1 className="text-xl md:text-2xl font-black text-gray-900">Hello Teacher 👋</h1>
           <p className="text-xs md:text-sm text-gray-400 font-medium">Ready for today's mission?</p>
         </div>
         <div className="flex items-center gap-3 w-full md:w-auto">
