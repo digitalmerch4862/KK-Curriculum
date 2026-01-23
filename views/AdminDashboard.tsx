@@ -462,14 +462,14 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
               </button>
 
               <div className="bg-white/95 backdrop-blur-md p-4 md:p-6 rounded-[32px] md:rounded-full border border-gray-100 shadow-xl flex flex-wrap items-center justify-between sticky top-[72px] md:top-[92px] z-40 gap-4">
-                <h2 className="font-black text-lg md:text-2xl px-2 md:px-4 text-[#003882] truncate max-w-[200px] md:max-w-none">
+                <h2 className="font-black text-lg md:text-2xl px-2 md:px-4 text-[#003882] truncate max-w-[150px] md:max-w-none">
                   {editingId === 'new' ? 'New Lesson' : (formData.title || 'Refining...')}
                 </h2>
                 <div className="flex items-center gap-2 md:gap-3 w-full md:w-auto">
-                  <button onClick={() => setEditingId(null)} className="flex-1 md:flex-none px-4 md:px-6 py-3 text-[10px] md:text-xs font-black uppercase text-gray-400 hover:text-black">DISCARD</button>
+                  <button onClick={() => setEditingId(null)} className="flex-1 md:flex-none px-4 md:px-6 py-3 text-[10px] md:text-xs font-black uppercase text-gray-400 hover:text-black tracking-widest">DISCARD</button>
                   <button onClick={() => setIsAiModalOpen(true)} className="flex-[2] md:flex-none px-6 md:px-8 py-3.5 md:py-4 bg-[#EF4E92] rounded-full text-[10px] md:text-xs font-black uppercase tracking-widest text-white shadow-lg shadow-[#EF4E92]/20 hover:scale-[1.02] transition-transform">GENERATE WITH AI</button>
-                  <button onClick={() => handleSave(LessonStatus.DRAFT)} className="flex-1 md:flex-none px-4 md:px-8 py-3.5 md:py-4 bg-[#EF4E92] rounded-full text-[10px] md:text-xs font-black uppercase tracking-widest text-white shadow-lg shadow-[#EF4E92]/20">DRAFT</button>
-                  <button onClick={() => handleSave(LessonStatus.PUBLISHED)} className="flex-[2] md:flex-none px-6 md:px-10 py-3.5 md:py-4 bg-[#EF4E92] rounded-full text-[10px] md:text-xs font-black uppercase tracking-widest text-white shadow-lg shadow-[#EF4E92]/20">PUBLISH</button>
+                  <button onClick={() => handleSave(LessonStatus.DRAFT)} className="flex-1 md:flex-none px-6 md:px-10 py-3.5 md:py-4 bg-[#003882] rounded-full text-[10px] md:text-xs font-black uppercase tracking-widest text-white shadow-lg shadow-[#003882]/20 hover:scale-[1.02] transition-transform">DRAFT</button>
+                  <button onClick={() => handleSave(LessonStatus.PUBLISHED)} className="flex-[2] md:flex-none px-8 md:px-12 py-3.5 md:py-4 bg-[#EF4E92] rounded-full text-[10px] md:text-xs font-black uppercase tracking-widest text-white shadow-lg shadow-[#EF4E92]/20 hover:scale-[1.02] transition-transform">PUBLISH</button>
                 </div>
               </div>
 
@@ -491,7 +491,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
                   <div className="bg-white rounded-[32px] md:rounded-[48px] p-5 md:p-6 shadow-sm border border-gray-50 flex gap-3">
                     <div className="flex-1 relative">
                       <select 
-                        className="w-full bg-[#F8FAFC] border-2 border-black rounded-[20px] md:rounded-[24px] px-6 py-5 md:px-8 md:py-7 text-xs md:text-sm font-black appearance-none" 
+                        className="w-full bg-[#F8FAFC] border-none rounded-[20px] md:rounded-[24px] px-6 py-5 md:px-8 md:py-7 text-xs md:text-sm font-black appearance-none outline-none" 
                         value={formData.category} 
                         onChange={e => setFormData({...formData, category: e.target.value})}
                       >
