@@ -18,25 +18,25 @@ export const generateLessonSummary = async (content: string) => {
 export const categorizeLessonTitle = async (title: string) => {
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   const categories = [
-    "Pentateuch",
-    "History",
-    "Poetry",
-    "The Prophets",
-    "The Gospels",
-    "Acts & Epistles",
-    "Revelation"
+    "PENTATEUCH",
+    "HISTORY",
+    "POETRY",
+    "THE PROPHETS",
+    "THE GOSPELS",
+    "ACTS & EPISTLES",
+    "REVELATION"
   ];
   
   const response = await ai.models.generateContent({
     model: 'gemini-3-flash-preview',
     contents: `Given the Sunday School lesson title "${title}", which of these biblical categories does it best fit into? 
     Categories: [${categories.join(', ')}]. 
-    Return only the category name from the list provided. If unsure, return "History".`,
+    Return only the category name from the list provided exactly as written. If unsure, return "HISTORY".`,
   });
   
-  const result = response.text?.trim() || "History";
-  // Validate that the returned string is actually in our list
-  return categories.find(c => result.includes(c)) || "History";
+  const result = response.text?.trim().toUpperCase() || "HISTORY";
+  // Validate that the returned string matches one in our list
+  return categories.find(c => result.includes(c)) || "HISTORY";
 };
 
 export const generateFullLesson = async (goal: string, existingContext: string) => {

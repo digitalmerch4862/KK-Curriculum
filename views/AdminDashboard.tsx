@@ -66,7 +66,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
   const [lessons, setLessons] = useState<Lesson[]>([]);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [formData, setFormData] = useState<Partial<Lesson>>({
-    title: '', summary: '', content: '', category: 'History', series: '', grade_min: 1, grade_max: 5, tags: [], status: LessonStatus.DRAFT
+    title: '', summary: '', content: '', category: 'HISTORY', series: '', grade_min: 1, grade_max: 5, tags: [], status: LessonStatus.DRAFT
   });
   
   const [structure, setStructure] = useState<LessonContentStructure>({
@@ -76,13 +76,13 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
   });
 
   const categories = [
-    'Pentateuch',
-    'History',
-    'Poetry',
-    'The Prophets',
-    'The Gospels',
-    'Acts & Epistles',
-    'Revelation'
+    'PENTATEUCH',
+    'HISTORY',
+    'POETRY',
+    'THE PROPHETS',
+    'THE GOSPELS',
+    'ACTS & EPISTLES',
+    'REVELATION'
   ];
 
   const [activities, setActivities] = useState<Partial<LessonActivity>[]>([]);
@@ -192,7 +192,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
   const handleNew = () => {
     setEditingId('new');
     setFormData({ 
-      title: '', summary: '', content: '', category: 'History', series: '', grade_min: 1, grade_max: 5, tags: [], status: LessonStatus.DRAFT 
+      title: '', summary: '', content: '', category: 'HISTORY', series: '', grade_min: 1, grade_max: 5, tags: [], status: LessonStatus.DRAFT 
     });
     setStructure({
       read: [
@@ -438,12 +438,33 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
                 </div>
                 <div className="space-y-4">
                   <SectionHeader title="Category" />
-                  <div className="flex gap-3">
-                    <select className="flex-1 bg-white border border-gray-100 rounded-[32px] px-8 py-7 text-sm font-black appearance-none outline-none shadow-sm focus:border-pink-300" value={formData.category} onChange={e => setFormData({...formData, category: e.target.value})}>
-                      {categories.map(c => <option key={c} value={c}>{c}</option>)}
-                    </select>
-                    <button onClick={handleAutoCategorize} disabled={isCategorizing} className="bg-white w-20 border border-gray-100 rounded-[32px] flex items-center justify-center font-black text-[#EF4E92] shadow-sm hover:bg-gray-50">
-                      {isCategorizing ? <div className="w-5 h-5 border-2 border-pink-500 border-t-transparent rounded-full animate-spin"></div> : 'AI'}
+                  <div className="flex items-center gap-4">
+                    <div className="flex-1 flex gap-2 overflow-x-auto pb-4 scrollbar-hide no-scrollbar">
+                      {categories.map(c => (
+                        <button
+                          key={c}
+                          onClick={() => setFormData({...formData, category: c})}
+                          className={`whitespace-nowrap px-8 py-4 rounded-full text-[11px] font-black uppercase tracking-widest transition-all ${
+                            formData.category === c 
+                              ? 'bg-[#EF4E92] text-white shadow-lg shadow-pink-100 scale-[1.05]' 
+                              : 'bg-white border border-gray-100 text-gray-400 hover:bg-gray-50'
+                          }`}
+                        >
+                          {c}
+                        </button>
+                      ))}
+                    </div>
+                    <button 
+                      onClick={handleAutoCategorize} 
+                      disabled={isCategorizing} 
+                      className="shrink-0 w-16 h-16 bg-white border border-gray-100 rounded-full flex items-center justify-center font-black text-[#EF4E92] shadow-sm hover:scale-110 active:scale-95 transition-all group"
+                      title="AI Auto-Categorize"
+                    >
+                      {isCategorizing ? (
+                        <div className="w-6 h-6 border-2 border-pink-500 border-t-transparent rounded-full animate-spin"></div>
+                      ) : (
+                        <span className="text-lg group-hover:scale-110 transition-transform">AI</span>
+                      )}
                     </button>
                   </div>
                 </div>
@@ -530,7 +551,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
                 <div className="flex items-center justify-between">
                   <SectionHeader title="Attachments & Resources" />
                   <button 
-                    onClick={() => setAttachments([...attachments, { name: '', storage_path: '', type: 'pdf', size_bytes: 0 }])} 
+                    onClick={() => setAttachments([...attachments, { name: '', storage_path: '', type: 'pdf' }])} 
                     className="bg-[#EF4E92] text-white px-8 py-3 rounded-full text-xs font-black uppercase tracking-widest shadow-lg hover:bg-[#EF4E92]/90 transition-all"
                   >
                     + ADD FILE LINK
