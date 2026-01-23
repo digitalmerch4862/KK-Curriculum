@@ -16,11 +16,23 @@ export interface Profile {
   created_at: string;
 }
 
+export interface LessonSubSection {
+  id: string;
+  title: string;
+  content: string;
+}
+
+export interface LessonContentStructure {
+  read: LessonSubSection[];
+  teach: LessonSubSection[];
+  engage: LessonSubSection[];
+}
+
 export interface Lesson {
   id: string;
   title: string;
   summary: string;
-  content: string;
+  content: string; // Stored as Markdown, parsed to Structure in UI
   category: string;
   series: string;
   grade_min: number;

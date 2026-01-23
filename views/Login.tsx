@@ -16,7 +16,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
     <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
       <div className="w-full max-w-md bg-white rounded-3xl p-10 shadow-xl border border-gray-100">
         <div className="text-center mb-10">
-          <div className="w-16 h-16 bg-pink-500 rounded-2xl mx-auto flex items-center justify-center mb-4 shadow-lg shadow-pink-200">
+          <div className="w-16 h-16 bg-[#EF4E92] rounded-2xl mx-auto flex items-center justify-center mb-4 shadow-lg shadow-pink-200">
             <span className="text-white text-2xl font-bold">K</span>
           </div>
           <h1 className="text-2xl font-black mb-1">KingdomKids</h1>
@@ -29,15 +29,11 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
             <button
               key={p.id}
               onClick={() => onLogin(p)}
-              className={`w-full py-4 px-6 rounded-2xl flex items-center justify-between border-2 transition-all group ${
-                p.role === UserRole.ADMIN 
-                  ? 'border-gray-900 hover:bg-gray-900 hover:text-white' 
-                  : 'border-pink-500 hover:bg-pink-500 hover:text-white'
-              }`}
+              className="w-full py-4 px-6 rounded-2xl flex items-center justify-between border-2 border-[#EF4E92] text-[#EF4E92] hover:bg-[#EF4E92] hover:text-white transition-all group"
             >
               <div className="text-left">
                 <p className="font-bold text-lg">{p.role === UserRole.ADMIN ? 'Administrator' : 'Teacher'}</p>
-                <p className={`text-xs opacity-60`}>Demo as {p.name}</p>
+                <p className="text-xs opacity-60">Demo as {p.name}</p>
               </div>
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M14 5l7 7m0 0l-7 7m7-7H3" />

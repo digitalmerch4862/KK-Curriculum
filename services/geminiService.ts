@@ -1,115 +1,127 @@
+
 import { GoogleGenAI, Type } from "@google/genai";
 
-const getApiKey = () => {
-  if (typeof process !== 'undefined' && process.env && process.env.API_KEY) {
-    return process.env.API_KEY;
-  }
-  return '';
-};
-
-const SYSTEM_INSTRUCTION = `You are a friendly kids-ministry expert, joyful, and Christ-centered. 
-Target Audience: Kids ages 5–10 (Primary), Volunteer teachers & parents (Secondary).
-Tone: Warm, simple, encouraging, never preachy.
-STRICT RULES:
-1. No emojis inside lesson content.
-2. Follow the exact hierarchy provided.
-3. No admin commentary.`;
-
-export const generateStructuredLesson = async (topic: string) => {
-  const apiKey = getApiKey();
-  const ai = new GoogleGenAI({ apiKey });
-  const response = await ai.models.generateContent({
-    model: 'gemini-3-flash-preview',
-    contents: `Write a full lesson about "${topic}" following this EXACT structure:
-
-# 1. Read
-## Bible Text
-(Main scripture with short paraphrase for kids)
-## The Biggest Story
-(3–5 sentences connecting to God’s big redemption story)
-
-# 2. Teach
-## Big Picture
-(Short paragraph explaining what this is about)
-## Tell the Story
-(Narrative-style retelling, visual, kid-friendly)
-## Teach the Story
-(Key meanings, context, and moments)
-## Big Truth
-(Starts with: "God wants us to know that...")
-## Gospel Connection
-(Explicitly connect to Jesus)
-
-# 3. Engage
-## Discussion
-(4–6 open-ended questions)
-## Memory Verse
-(Short verse with reference)
-## Activities
-(2–3 hands-on group activities)
-## Crafts
-(1–2 simple crafts with common supplies)
-
-# 4. How to Use
-(Step-by-step teacher guidance, timing tips, flow)
-
-Rules: No emojis. Use clear headers. Christ-centered. Target kids 5-10.`,
-    config: {
-      systemInstruction: SYSTEM_INSTRUCTION
-    }
-  });
-  return response.text;
-};
+/**
+ * Service for generating Sunday School lesson content using Gemini.
+ */
 
 export const generateLessonSummary = async (content: string) => {
-  const apiKey = getApiKey();
-  const ai = new GoogleGenAI({ apiKey });
+  // Always use process.env.API_KEY directly when initializing.
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   const response = await ai.models.generateContent({
     model: 'gemini-3-flash-preview',
-    contents: `Summarize this lesson for a teacher's preview in 2-3 engaging sentences. No emojis. Content: ${content}`,
-    config: { systemInstruction: SYSTEM_INSTRUCTION }
+    contents: `Summarize the following lesson content into 2-3 engaging sentences for teachers. Content: ${content}`,
   });
   return response.text;
 };
 
-export const generateDiscussionQuestions = async (content: string) => {
-  const apiKey = getApiKey();
-  const ai = new GoogleGenAI({ apiKey });
+export const categorizeLessonTitle = async (title: string) => {
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const categories = [
+    "Pentateuch",
+    "History",
+    "Poetry",
+    "The Prophets",
+    "The Gospels",
+    "Acts & Epistles",
+    "Revelation"
+  ];
+  
   const response = await ai.models.generateContent({
     model: 'gemini-3-flash-preview',
-    contents: `Based on this content, generate 5 age-appropriate discussion questions for kids 5-10. No emojis. Content: ${content}`,
-    config: { systemInstruction: SYSTEM_INSTRUCTION }
+    contents: `Given the Sunday School lesson title "${title}", which of these biblical categories does it best fit into? 
+    Categories: [${categories.join(', ')}]. 
+    Return only the category name from the list provided. If unsure, return "History".`,
   });
-  return response.text;
+  
+  const result = response.text?.trim() || "History";
+  // Validate that the returned string is actually in our list
+  return categories.find(c => result.includes(c)) || "History";
 };
 
-export const generateActivitiesDraft = async (content: string) => {
-  const apiKey = getApiKey();
-  const ai = new GoogleGenAI({ apiKey });
+export const generateFullLesson = async (goal: string, existingContext: string) => {
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const prompt = `
+    Architect a complete Sunday School lesson plan based on this user's summary goal or lesson objective:
+    "${goal}"
+
+    This objective describes what the lesson is about, who it is for, and the spiritual goals for the listeners.
+
+    Context of existing lessons in the system: [${existingContext}]
+    
+    CRITICAL INSTRUCTION:
+    - If a lesson with this title or core story already exists in the context, do NOT duplicate the approach. Propose a FRESH perspective or a complementary deep-dive.
+    - If it is new, provide a comprehensive standard plan.
+    
+    Structure your response as a valid JSON object with:
+    - title: A compelling lesson title.
+    - read: Array of objects { title, content }
+    - teach: Array of objects { title, content }
+    - engage: Array of objects { title, content }
+  `;
+
   const response = await ai.models.generateContent({
-    model: 'gemini-3-flash-preview',
-    contents: `Create 2 creative hands-on activities for kids 5-10 based on this lesson. Return as JSON. No emojis in text.`,
+    model: 'gemini-3-pro-preview',
+    contents: prompt,
     config: {
-      systemInstruction: SYSTEM_INSTRUCTION,
       responseMimeType: "application/json",
       responseSchema: {
-        type: Type.ARRAY,
-        items: {
-          type: Type.OBJECT,
-          properties: {
-            title: { type: Type.STRING },
-            supplies: { type: Type.ARRAY, items: { type: Type.STRING } },
-            instructions: { type: Type.STRING },
-            duration_minutes: { type: Type.NUMBER }
-          },
-          required: ["title", "supplies", "instructions", "duration_minutes"]
-        }
+        type: Type.OBJECT,
+        properties: {
+          title: { type: Type.STRING },
+          read: { type: Type.ARRAY, items: { type: Type.OBJECT, properties: { title: { type: Type.STRING }, content: { type: Type.STRING } } } },
+          teach: { type: Type.ARRAY, items: { type: Type.OBJECT, properties: { title: { type: Type.STRING }, content: { type: Type.STRING } } } },
+          engage: { type: Type.ARRAY, items: { type: Type.OBJECT, properties: { title: { type: Type.STRING }, content: { type: Type.STRING } } } },
+        },
+        required: ["title", "read", "teach", "engage"]
       }
     }
   });
+
   try {
-    return JSON.parse(response.text || '[]');
+    return JSON.parse(response.text || '{}');
   } catch (e) {
-    return [];
+    console.error("Failed to parse AI generation result", e);
+    return null;
+  }
+};
+
+export const generateDiscussionQuestions = async (content: string, gradeRange: string) => {
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const response = await ai.models.generateContent({
+    model: 'gemini-3-flash-preview',
+    contents: `Generate 5 age-appropriate discussion questions for children in grades ${gradeRange} based on this lesson content: ${content}`,
+  });
+  return response.text;
+};
+
+export const generateActivitiesDraft = async (content: string, gradeRange: string) => {
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const response = await ai.models.generateContent({
+    model: 'gemini-3-pro-preview',
+    contents: `Create 2 creative hands-on activities based on this lesson for children in grades ${gradeRange}. Return as a JSON list.`,
+    config: {
+        responseMimeType: "application/json",
+        responseSchema: {
+            type: Type.ARRAY,
+            items: {
+                type: Type.OBJECT,
+                properties: {
+                    title: { type: Type.STRING },
+                    supplies: { type: Type.ARRAY, items: { type: Type.STRING } },
+                    instructions: { type: Type.STRING },
+                    duration_minutes: { type: Type.NUMBER }
+                },
+                required: ["title", "supplies", "instructions", "duration_minutes"]
+            }
+        }
+    }
+  });
+  try {
+      const text = response.text?.trim() || '[]';
+      return JSON.parse(text);
+  } catch (e) {
+      console.error("Failed to parse Gemini response as JSON", e);
+      return [];
   }
 };
