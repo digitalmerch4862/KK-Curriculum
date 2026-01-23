@@ -439,20 +439,17 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
                 <div className="space-y-4">
                   <SectionHeader title="Category" />
                   <div className="flex items-center gap-4">
-                    <div className="flex-1 flex gap-2 overflow-x-auto pb-4 scrollbar-hide no-scrollbar">
-                      {categories.map(c => (
-                        <button
-                          key={c}
-                          onClick={() => setFormData({...formData, category: c})}
-                          className={`whitespace-nowrap px-8 py-4 rounded-full text-[11px] font-black uppercase tracking-widest transition-all ${
-                            formData.category === c 
-                              ? 'bg-[#EF4E92] text-white shadow-lg shadow-pink-100 scale-[1.05]' 
-                              : 'bg-white border border-gray-100 text-gray-400 hover:bg-gray-50'
-                          }`}
-                        >
-                          {c}
-                        </button>
-                      ))}
+                    <div className="relative flex-1 group">
+                      <select 
+                        className="w-full bg-white border border-gray-100 rounded-[32px] px-8 py-7 text-sm font-black appearance-none outline-none shadow-sm focus:border-pink-300 transition-all cursor-pointer"
+                        value={formData.category} 
+                        onChange={e => setFormData({...formData, category: e.target.value})}
+                      >
+                        {categories.map(c => <option key={c} value={c}>{c}</option>)}
+                      </select>
+                      <div className="absolute right-8 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400 group-hover:text-[#EF4E92] transition-colors">
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M19 9l-7 7-7-7" /></svg>
+                      </div>
                     </div>
                     <button 
                       onClick={handleAutoCategorize} 
