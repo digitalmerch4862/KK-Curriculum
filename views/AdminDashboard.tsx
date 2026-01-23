@@ -13,6 +13,16 @@ const SectionHeader: React.FC<{ title: string }> = ({ title }) => (
   </div>
 );
 
+const BIBLE_BOOKS = [
+  "Genesis", "Exodus", "Leviticus", "Numbers", "Deuteronomy", "Joshua", "Judges", "Ruth", "1 Samuel", "2 Samuel", 
+  "1 Kings", "2 Kings", "1 Chronicles", "2 Chronicles", "Ezra", "Nehemiah", "Esther", "Job", "Psalms", "Proverbs", 
+  "Ecclesiastes", "Song of Solomon", "Isaiah", "Jeremiah", "Lamentations", "Ezekiel", "Daniel", "Hosea", "Joel", 
+  "Amos", "Obadiah", "Jonah", "Micah", "Nahum", "Habakkuk", "Zephaniah", "Haggai", "Zechariah", "Malachi", "Matthew", 
+  "Mark", "Luke", "John", "Acts", "Romans", "1 Corinthians", "2 Corinthians", "Galatians", "Ephesians", "Philippians", 
+  "Colossians", "1 Thessalonians", "2 Thessalonians", "1 Timothy", "2 Timothy", "Titus", "Philemon", "Hebrews", 
+  "James", "1 Peter", "2 Peter", "1 John", "2 John", "3 John", "Jude", "Revelation"
+];
+
 interface SubSectionCardProps {
   sub: LessonSubSection;
   onUpdate: (updates: Partial<LessonSubSection>) => void;
@@ -25,39 +35,142 @@ const SubSectionCard: React.FC<SubSectionCardProps> = ({
   onUpdate, 
   onDelete, 
   placeholder 
-}) => (
-  <div className="bg-white p-8 md:p-10 rounded-[40px] relative shadow-sm border-2 border-transparent hover:border-pink-50 transition-all group flex flex-col min-h-[220px]">
-    <button 
-      onClick={(e) => { e.stopPropagation(); onDelete(); }} 
-      className="absolute top-6 right-8 text-gray-300 hover:text-red-500 transition-colors z-10"
-      aria-label="Delete section"
-    >
-      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M6 18L18 6M6 6l12 12" />
-      </svg>
-    </button>
+}) => {
+  const [bibleBook, setBibleBook] = useState('');
+  const [bibleChapter, setBibleChapter] = useState('');
+  const [bibleVerse, setBibleVerse] = useState('');
+  const [isFetching, setIsFetching] = useState(false);
+
+  const isBibleCard = sub.title.toLowerCase().includes('bible text');
+
+  const fetchBibleText = async () => {
+    // Sanitize inputs by trimming whitespace
+    const book = bibleBook.trim();
+    const chapter = bibleChapter.trim();
+    const verse = bibleVerse.trim();
+
+    if (!book || !chapter) {
+      return alert("Please enter at least a Book and Chapter (e.g. Genesis 1 or Genesis 1-2)");
+    }
+
+    // Dynamic Query Construction Logic
+    // Scenario A (Whole Chapter/s): If Book and Chapter are filled, but Verse is empty -> "{Book} {Chapter}"
+    // Scenario B (Specific Verses): If Book, Chapter, and Verse are ALL filled -> "{Book} {Chapter}:{Verse}"
+    let reference = `${book} ${chapter}`;
+    if (verse) {
+      reference = `${book} ${chapter}:${verse}`;
+    }
     
-    <div className="mb-4">
-      <input 
-        type="text"
-        className="w-full bg-transparent border-none text-xs font-black uppercase tracking-widest text-gray-400 focus:text-[#003882] outline-none"
-        value={sub.title}
-        onChange={e => onUpdate({ title: e.target.value })}
-        placeholder="Section Label"
+    setIsFetching(true);
+    try {
+      const res = await fetch(`https://bible-api.com/${encodeURIComponent(reference)}`);
+      const data = await res.json();
+      
+      if (data && data.text) {
+        onUpdate({ content: data.text.trim() });
+      } else {
+        alert(`Reference "${reference}" not found. For chapter ranges, try "Genesis 1-2" with an empty verse field.`);
+      }
+    } catch (e) {
+      console.error("Bible Fetch Error:", e);
+      alert("Failed to fetch Bible text. Please check your internet connection.");
+    } finally {
+      setIsFetching(false);
+    }
+  };
+
+  return (
+    <div className="bg-white p-8 md:p-10 rounded-[40px] relative shadow-sm border-2 border-transparent hover:border-pink-50 transition-all group flex flex-col min-h-[220px]">
+      {/* Remove Close/Delete (X) icon for Bible Text card */}
+      {!isBibleCard && (
+        <button 
+          onClick={(e) => { e.stopPropagation(); onDelete(); }} 
+          className="absolute top-6 right-8 text-gray-300 hover:text-red-500 transition-colors z-10"
+          aria-label="Delete section"
+        >
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+      )}
+      
+      <div className="mb-4">
+        <input 
+          type="text"
+          className="w-full bg-transparent border-none text-xs font-black uppercase tracking-widest text-gray-400 focus:text-[#003882] outline-none"
+          value={sub.title}
+          onChange={e => onUpdate({ title: e.target.value })}
+          placeholder="Section Label"
+          readOnly={isBibleCard}
+        />
+      </div>
+
+      {isBibleCard && (
+        <div className="mb-6 space-y-3 max-w-full">
+          {/* Row 1: Book Searchable Dropdown */}
+          <div className="w-full">
+            <input 
+              list="bible-books"
+              type="text"
+              className="w-full bg-gray-50 border-2 border-gray-100 rounded-xl px-4 py-2.5 text-sm focus:border-[#EF4E92] outline-none transition-all font-medium"
+              placeholder="Select Book (e.g. Genesis)"
+              value={bibleBook}
+              onChange={e => setBibleBook(e.target.value)}
+            />
+            <datalist id="bible-books">
+              {BIBLE_BOOKS.map(book => <option key={book} value={book} />)}
+            </datalist>
+          </div>
+          
+          {/* Row 2: Chapter (text) and Verse (text) side-by-side */}
+          <div className="flex items-center gap-2">
+            <input 
+              type="text"
+              className="flex-1 min-w-0 bg-gray-50 border-2 border-gray-100 rounded-xl px-4 py-2.5 text-sm focus:border-[#EF4E92] outline-none transition-all font-medium"
+              placeholder="Ch (e.g. 1-2)"
+              value={bibleChapter}
+              onChange={e => setBibleChapter(e.target.value)}
+            />
+            <input 
+              type="text"
+              className="flex-1 min-w-0 bg-gray-50 border-2 border-gray-100 rounded-xl px-4 py-2.5 text-sm focus:border-[#EF4E92] outline-none transition-all font-medium"
+              placeholder="Verse(s)"
+              value={bibleVerse}
+              onChange={e => setBibleVerse(e.target.value)}
+            />
+          </div>
+
+          {/* Row 3: Full Width Fetch Button */}
+          <button 
+            onClick={fetchBibleText}
+            disabled={isFetching}
+            className="w-full h-11 bg-[#003882] text-white rounded-xl flex items-center justify-center gap-2 hover:bg-[#003882]/90 disabled:opacity-50 transition-all shadow-sm shrink-0 font-black uppercase tracking-widest text-[10px]"
+          >
+            {isFetching ? (
+              <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+            ) : (
+              <>
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+                <span>Fetch Verses</span>
+              </>
+            )}
+          </button>
+        </div>
+      )}
+
+      <textarea 
+        rows={6} 
+        placeholder={placeholder} 
+        className="w-full bg-transparent border-none text-base leading-relaxed outline-none resize-none text-gray-600 font-medium flex-1 scrollbar-hide" 
+        value={sub.content} 
+        onChange={e => onUpdate({ content: e.target.value })} 
       />
     </div>
+  );
+};
 
-    <textarea 
-      rows={6} 
-      placeholder={placeholder} 
-      className="w-full bg-transparent border-none text-base leading-relaxed outline-none resize-none text-gray-600 font-medium flex-1 scrollbar-hide" 
-      value={sub.content} 
-      onChange={e => onUpdate({ content: e.target.value })} 
-    />
-  </div>
-);
-
-// Standard Template for New Lessons
 const DEFAULT_LESSON_TEMPLATE: LessonContentStructure = {
   read: [
     { id: 'tpl-r1', title: 'Bible Text', content: '' },
@@ -115,7 +228,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
   const [aiGoal, setAiGoal] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   const [generationHistory, setGenerationHistory] = useState<{title: string, structure: LessonContentStructure}[]>([]);
-  const [currentHistoryIndex, setCurrentHistoryIndex] = useState(-1);
 
   useEffect(() => {
     fetchLessons();
@@ -125,13 +237,10 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
     const newStructure: LessonContentStructure = { read: [], teach: [], engage: [] };
     if (!md) return newStructure;
 
-    // Split by main headers (# 1. Read, # 2. Teach, # 3. Engage)
     const mainSections = md.split(/^# \d\. /m);
     
     ['read', 'teach', 'engage'].forEach((key, i) => {
       const fullBlock = mainSections[i + 1] || '';
-      // A section block starts with its title (e.g., "Read\n\n") then subheaders
-      // We split by ## and skip the first part which is the main section header
       const parts = fullBlock.split(/^## /m);
       const subSections = parts.slice(1).filter(s => s.trim());
       
@@ -179,7 +288,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
         setEditingId(id);
         setFormData(full);
         
-        // Parse directly to avoid state race conditions and phantom headers
         const parsedStructure = parseMarkdownToStructure(full.content || '');
         setStructure(parsedStructure);
         
@@ -187,7 +295,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
         setVideos(full.videos || []);
         setAttachments(full.attachments || []);
         setGenerationHistory([]);
-        setCurrentHistoryIndex(-1);
         window.scrollTo({ top: 0, behavior: 'smooth' });
       }
     } catch (e: any) {
@@ -197,14 +304,12 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
 
   const handleDelete = async (e: React.MouseEvent, id: string) => {
     e.stopPropagation();
-    if (!window.confirm("Are you sure you want to permanently delete this lesson? This action cannot be undone.")) return;
+    if (!window.confirm("Are you sure you want to permanently delete this lesson?")) return;
     
     setLoading(true);
     try {
       await db.lessons.delete(id);
-      if (editingId === id) {
-        setEditingId(null);
-      }
+      if (editingId === id) setEditingId(null);
       await fetchLessons();
     } catch (e: any) {
       alert("Delete failed: " + e.message);
@@ -219,8 +324,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
       title: '', summary: '', content: '', category: 'HISTORY', series: '', grade_min: 1, grade_max: 5, tags: [], status: LessonStatus.DRAFT 
     });
     
-    // Apply Standard Content Template for NEW lessons
-    // We generate fresh IDs for each card to ensure they are unique
     const freshTemplate: LessonContentStructure = {
       read: DEFAULT_LESSON_TEMPLATE.read.map(item => ({ ...item, id: Math.random().toString(36).substr(2, 9) })),
       teach: DEFAULT_LESSON_TEMPLATE.teach.map(item => ({ ...item, id: Math.random().toString(36).substr(2, 9) })),
@@ -228,12 +331,10 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
     };
     
     setStructure(freshTemplate);
-    
     setActivities([]);
     setVideos([]);
     setAttachments([]);
     setGenerationHistory([]);
-    setCurrentHistoryIndex(-1);
     setAiGoal('');
     setAiStep('questions');
     setError(null);
@@ -241,7 +342,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
   };
 
   const handleSave = async (status: LessonStatus) => {
-    if (!formData.title) return alert("Lesson Identity (Title) is required.");
+    if (!formData.title) return alert("Lesson Title is required.");
     
     setLoading(true);
     setError(null);
@@ -269,7 +370,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
       }
 
       await db.lessons.upsert(payload, activities, videos, attachments);
-      alert(`Lesson successfully ${status === LessonStatus.PUBLISHED ? 'published' : 'saved as draft'}!`);
+      alert(`Lesson ${status === LessonStatus.PUBLISHED ? 'published' : 'saved'} successfully!`);
       setEditingId(null);
       fetchLessons();
     } catch (e: any) {
@@ -281,7 +382,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
   };
 
   const handleAiGenerate = async () => {
-    if (!aiGoal.trim()) return alert("Please describe your lesson summary or objective.");
+    if (!aiGoal.trim()) return alert("Please describe your lesson objective.");
     setIsGenerating(true);
     try {
       const existingContext = lessons.map(l => l.title).join(', ');
@@ -289,16 +390,14 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
       if (result) {
         const newGen = {
           title: result.title,
+          summary: result.summary,
           structure: {
             read: result.read.map((r: any) => ({ id: Math.random().toString(36).substr(2, 9), title: r.title, content: r.content })),
             teach: result.teach.map((t: any) => ({ id: Math.random().toString(36).substr(2, 9), title: t.title, content: t.content })),
             engage: result.engage.map((e: any) => ({ id: Math.random().toString(36).substr(2, 9), title: e.title, content: e.content })),
           }
         };
-        const newHistory = [...generationHistory, newGen];
-        setGenerationHistory(newHistory);
-        setCurrentHistoryIndex(newHistory.length - 1);
-        setFormData(prev => ({ ...prev, title: newGen.title }));
+        setFormData(prev => ({ ...prev, title: newGen.title, summary: newGen.summary }));
         setStructure(newGen.structure);
         setAiStep('preview');
       }
@@ -310,7 +409,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
   };
 
   const handleAutoCategorize = async () => {
-    if (!formData.title) return alert("Please enter a Lesson Identity (Title) first.");
+    if (!formData.title) return alert("Please enter a Lesson Title first.");
     setIsCategorizing(true);
     try {
       const detectedCategory = await categorizeLessonTitle(formData.title);
@@ -348,19 +447,19 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
       {/* AI GENERATOR MODAL */}
       {isAiModalOpen && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-black/60 backdrop-blur-sm animate-in fade-in duration-300">
-          <div className="bg-white w-full max-w-2xl rounded-[48px] p-8 md:p-12 shadow-2xl space-y-8 relative overflow-hidden">
+          <div className="bg-white w-full h-auto max-w-2xl rounded-[48px] p-8 md:p-12 shadow-2xl space-y-8 relative overflow-hidden">
             <button onClick={() => setIsAiModalOpen(false)} className="absolute top-8 right-10 text-gray-300 hover:text-black">
               <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M6 18L18 6M6 6l12 12" /></svg>
             </button>
             <div className="space-y-2">
               <h2 className="text-3xl font-black text-[#003882] tracking-tighter uppercase">AI Lesson Architect</h2>
-              <p className="text-gray-400 font-medium">{aiStep === 'questions' ? 'Define your goal.' : 'Review your plan.'}</p>
+              <p className="text-gray-400 font-medium">{aiStep === 'questions' ? 'Define your objective.' : 'Review generated draft.'}</p>
             </div>
             {aiStep === 'questions' ? (
               <div className="space-y-6">
-                <textarea rows={6} className="w-full bg-[#F8FAFC] border-2 border-transparent focus:border-[#EF4E92] rounded-[32px] px-8 py-7 outline-none transition-all font-medium resize-none text-gray-800 leading-relaxed" placeholder="Summarize your objective..." value={aiGoal} onChange={e => setAiGoal(e.target.value)} />
+                <textarea rows={6} className="w-full bg-[#F8FAFC] border-2 border-transparent focus:border-[#EF4E92] rounded-[32px] px-8 py-7 outline-none transition-all font-medium resize-none text-gray-800 leading-relaxed" placeholder="Tell the Architect what you want to teach today..." value={aiGoal} onChange={e => setAiGoal(e.target.value)} />
                 <button onClick={handleAiGenerate} disabled={isGenerating} className="w-full bg-[#EF4E92] text-white rounded-full py-5 font-black uppercase tracking-widest shadow-lg hover:bg-[#EF4E92]/90 transition-all flex items-center justify-center gap-3 disabled:opacity-50">
-                  {isGenerating ? 'Architecting...' : 'Generate'}
+                  {isGenerating ? 'Architecting...' : 'Start Building'}
                 </button>
               </div>
             ) : (
@@ -368,6 +467,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
                 <div className="bg-gray-50 rounded-[32px] p-6 border border-gray-100 max-h-[30vh] overflow-y-auto">
                   <h4 className="font-black text-indigo-900 mb-2 uppercase text-[10px] tracking-[0.2em]">Live Preview</h4>
                   <p className="font-black text-lg text-gray-800">{formData.title}</p>
+                  <p className="text-sm text-gray-400 mt-2 italic">{formData.summary}</p>
                 </div>
                 <button onClick={() => setIsAiModalOpen(false)} className="w-full bg-[#EF4E92] text-white rounded-full py-5 font-black uppercase tracking-widest shadow-lg hover:bg-[#EF4E92]/90 transition-all">Use Selected</button>
               </div>
@@ -388,77 +488,51 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
       </header>
 
       <div className="max-w-[1600px] mx-auto p-6 md:p-12 grid grid-cols-1 lg:grid-cols-12 gap-8 md:gap-16">
-        {/* Sidebar */}
         <div className={`lg:col-span-3 space-y-8 ${editingId ? 'hidden lg:block' : 'block'}`}>
           <div className="flex items-center justify-between">
             <h2 className="font-black text-2xl md:text-3xl tracking-tighter text-[#003882]">Lessons</h2>
-            <button onClick={handleNew} className="bg-[#EF4E92] text-white px-5 py-2.5 rounded-full text-[9px] md:text-[10px] font-black uppercase tracking-widest shadow-xl hover:bg-[#EF4E92]/90">+ NEW</button>
+            <button onClick={handleNew} className="bg-[#EF4E92] text-white px-5 py-2.5 rounded-full text-[9px] md:text-[10px] font-black uppercase tracking-widest shadow-xl hover:bg-[#EF4E92]/90 transition-all">+ NEW</button>
           </div>
           <div className="space-y-4 overflow-y-auto lg:max-h-[calc(100vh-280px)] pr-2 scrollbar-hide">
             {lessons.map(l => (
               <div key={l.id} onClick={() => handleEdit(l.id)} className={`p-5 md:p-6 rounded-[32px] border transition-all cursor-pointer relative ${editingId === l.id ? 'border-pink-500 bg-pink-50/30' : 'border-gray-50 bg-white hover:border-gray-200 shadow-sm'}`}>
-                <div className="flex justify-between items-start mb-3">
-                  <h3 className="font-bold text-sm line-clamp-1 text-gray-800">{l.title || 'Untitled'}</h3>
-                </div>
+                <h3 className="font-bold text-sm line-clamp-1 text-gray-800 mb-3">{l.title || 'Untitled'}</h3>
                 <div className="flex items-center justify-between">
                   <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">{l.category}</p>
-                  <div className="flex items-center gap-2">
-                    <span className={`text-[8px] font-black uppercase px-2 py-0.5 rounded-full ${l.status === LessonStatus.PUBLISHED ? 'bg-green-500 text-white' : 'bg-orange-500 text-white'}`}>{l.status}</span>
-                    <div className="flex items-center gap-2">
-                      <button 
-                        type="button"
-                        onClick={(e) => { e.stopPropagation(); handleEdit(l.id); }}
-                        className="flex items-center justify-center w-8 h-8 border-[2px] border-gray-200 rounded-full bg-white text-gray-400 hover:text-white hover:bg-[#EF4E92] transition-all shadow-sm"
-                      >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
-                      </button>
-                      <button 
-                        type="button"
-                        onClick={(e) => { e.stopPropagation(); handleDelete(e, l.id); }}
-                        className="flex items-center justify-center w-8 h-8 border-[2px] border-gray-200 rounded-full bg-white text-gray-400 hover:text-white hover:bg-red-500 transition-all shadow-sm"
-                      >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-                      </button>
-                    </div>
-                  </div>
+                  <span className={`text-[8px] font-black uppercase px-2 py-0.5 rounded-full ${l.status === LessonStatus.PUBLISHED ? 'bg-green-500 text-white' : 'bg-orange-500 text-white'}`}>{l.status}</span>
                 </div>
               </div>
             ))}
           </div>
         </div>
 
-        {/* Editor Area */}
         <div className={`lg:col-span-9 ${!editingId ? 'hidden lg:block' : 'block'}`}>
           {!editingId ? (
             <div className="h-[70vh] flex flex-col items-center justify-center bg-white rounded-[64px] border border-gray-100 text-gray-300 p-12 text-center shadow-sm">
               <svg className="w-20 h-20 opacity-10 mb-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 6v6m0 0v6m0-6h6m-6 0H6" /></svg>
-              <p className="font-black uppercase tracking-[0.3em] text-[10px]">Select a lesson from the left</p>
+              <p className="font-black uppercase tracking-[0.3em] text-[10px]">Select or Create a lesson</p>
             </div>
           ) : (
             <div className="space-y-16 animate-in fade-in slide-in-from-bottom-6 duration-700 pb-20">
               <div className="bg-white/95 backdrop-blur-md p-4 md:p-6 rounded-full border border-gray-100 shadow-xl flex flex-wrap items-center justify-between sticky top-[92px] z-40 gap-4">
-                <h2 className="font-black text-lg md:text-2xl px-4 text-[#003882] truncate max-w-[200px]">{formData.title || 'New Lesson'}</h2>
+                <h2 className="font-black text-lg md:text-2xl px-4 text-[#003882] truncate max-w-[200px]">{formData.title || 'Draft Lesson'}</h2>
                 <div className="flex items-center gap-3">
-                  {editingId !== 'new' && (
-                    <button onClick={(e) => handleDelete(e, editingId!)} className="px-6 py-3 text-xs font-black uppercase text-red-500 hover:text-red-700 tracking-widest transition-colors">DELETE</button>
-                  )}
                   <button onClick={() => setEditingId(null)} className="px-6 py-3 text-xs font-black uppercase text-gray-400 hover:text-black tracking-widest">DISCARD</button>
                   <button onClick={() => setIsAiModalOpen(true)} className="px-8 py-4 bg-[#EF4E92] rounded-full text-xs font-black uppercase tracking-widest text-white shadow-lg hover:scale-[1.02] transition-transform">AI ARCHITECT</button>
-                  <button onClick={() => handleSave(LessonStatus.DRAFT)} className="px-10 py-4 bg-[#003882] rounded-full text-xs font-black uppercase tracking-widest text-white shadow-lg hover:scale-[1.02] transition-transform">DRAFT</button>
-                  <button onClick={() => handleSave(LessonStatus.PUBLISHED)} className="px-12 py-4 bg-[#EF4E92] rounded-full text-xs font-black uppercase tracking-widest text-white shadow-lg hover:scale-[1.02] transition-transform">PUBLISH</button>
+                  <button onClick={() => handleSave(LessonStatus.DRAFT)} className="px-10 py-4 bg-[#003882] rounded-full text-xs font-black uppercase tracking-widest text-white shadow-lg transition-transform hover:scale-[1.02]">DRAFT</button>
+                  <button onClick={() => handleSave(LessonStatus.PUBLISHED)} className="px-12 py-4 bg-[#EF4E92] rounded-full text-xs font-black uppercase tracking-widest text-white shadow-lg transition-transform hover:scale-[1.02]">PUBLISH</button>
                 </div>
               </div>
 
-              {/* IDENTITY SECTION */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-12">
                 <div className="space-y-4">
                   <SectionHeader title="Lesson Identity" />
-                  <input placeholder="Ex: Genesis 1 - Creation" className="w-full bg-white border border-gray-100 rounded-[32px] px-8 py-7 font-black text-2xl text-gray-800 outline-none shadow-sm focus:border-pink-300" value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})} />
+                  <input placeholder="Lesson Title..." className="w-full bg-white border border-gray-100 rounded-[32px] px-8 py-7 font-black text-2xl text-gray-800 outline-none shadow-sm focus:border-pink-300 transition-all" value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})} />
                 </div>
                 <div className="space-y-4">
                   <SectionHeader title="Category" />
                   <div className="flex items-center gap-4">
-                    <div className="relative flex-1 group">
+                    <div className="relative flex-1">
                       <select 
                         className="w-full bg-white border border-gray-100 rounded-[32px] px-8 py-7 text-sm font-black appearance-none outline-none shadow-sm focus:border-pink-300 transition-all cursor-pointer"
                         value={formData.category} 
@@ -466,31 +540,34 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
                       >
                         {categories.map(c => <option key={c} value={c}>{c}</option>)}
                       </select>
-                      <div className="absolute right-8 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400 group-hover:text-[#EF4E92] transition-colors">
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M19 9l-7 7-7-7" /></svg>
-                      </div>
                     </div>
                     <button 
                       onClick={handleAutoCategorize} 
                       disabled={isCategorizing} 
-                      className="shrink-0 w-16 h-16 bg-white border border-gray-100 rounded-full flex items-center justify-center font-black text-[#EF4E92] shadow-sm hover:scale-110 active:scale-95 transition-all group"
+                      className="shrink-0 w-16 h-16 bg-white border border-gray-100 rounded-full flex items-center justify-center font-black text-[#EF4E92] shadow-sm hover:scale-110 active:scale-95 transition-all"
                       title="AI Auto-Categorize"
                     >
-                      {isCategorizing ? (
-                        <div className="w-6 h-6 border-2 border-pink-500 border-t-transparent rounded-full animate-spin"></div>
-                      ) : (
-                        <span className="text-lg group-hover:scale-110 transition-transform">AI</span>
-                      )}
+                      {isCategorizing ? <div className="w-6 h-6 border-2 border-pink-500 border-t-transparent rounded-full animate-spin"></div> : "AI"}
                     </button>
                   </div>
                 </div>
               </div>
 
-              {/* LESSON BODY */}
               <div className="space-y-8">
-                <SectionHeader title="The Lesson Body" />
+                <SectionHeader title="Lesson Summary" />
+                <textarea 
+                  rows={3} 
+                  placeholder="A short overview for teachers..." 
+                  className="w-full bg-white border border-gray-100 rounded-[32px] px-8 py-7 text-base font-medium text-gray-600 outline-none shadow-sm focus:border-pink-300 transition-all resize-none" 
+                  value={formData.summary} 
+                  onChange={e => setFormData({...formData, summary: e.target.value})} 
+                />
+              </div>
+
+              <div className="space-y-8">
+                <SectionHeader title="Lesson Body" />
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-                  {(['read', 'teach', 'engage'] as const).map((col, idx) => (
+                  {(['read', 'teach', 'engage'] as const).map((col) => (
                     <div key={col} className="bg-gray-50/60 rounded-[64px] p-8 md:p-10 flex flex-col min-h-[600px] border border-gray-100/50">
                       <div className="flex items-center justify-between mb-8 px-4">
                         <h4 className="font-black text-xs md:text-sm text-[#003882] uppercase tracking-[0.2em]">{col}</h4>
@@ -500,7 +577,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
                       </div>
                       <div className="space-y-6">
                         {structure[col].map(sub => (
-                          <SubSectionCard key={sub.id} sub={sub} onUpdate={updates => updateSubSection(col, sub.id, updates)} onDelete={() => deleteSubSection(col, sub.id)} placeholder={`Enter text for ${sub.title}...`} />
+                          <SubSectionCard key={sub.id} sub={sub} onUpdate={updates => updateSubSection(col, sub.id, updates)} onDelete={() => deleteSubSection(col, sub.id)} placeholder={`Content for ${sub.title}...`} />
                         ))}
                       </div>
                     </div>
@@ -508,107 +585,59 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
                 </div>
               </div>
 
-              {/* INTERACTIVE ACTIVITIES */}
               <div className="space-y-8">
-                <div className="flex items-center justify-between">
-                  <SectionHeader title="Interactive Activities" />
-                  <button onClick={() => setActivities([...activities, { title: '', instructions: '', supplies: [], duration_minutes: 15 }])} className="bg-[#EF4E92] text-white px-8 py-3 rounded-full text-xs font-black uppercase tracking-widest shadow-lg hover:bg-[#EF4E92]/90 transition-all">+ ADD ACTIVITY</button>
-                </div>
+                <SectionHeader title="Interactive Activities" />
+                <button onClick={() => setActivities([...activities, { title: '', instructions: '', supplies: [], duration_minutes: 15 }])} className="bg-[#EF4E92] text-white px-8 py-3 rounded-full text-xs font-black uppercase tracking-widest shadow-lg hover:bg-[#EF4E92]/90 transition-all">+ ADD ACTIVITY</button>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
                   {activities.map((act, idx) => (
-                    <div key={idx} className="bg-white border border-gray-100 rounded-[56px] p-10 shadow-sm space-y-6 relative group">
-                      <button onClick={(e) => { e.stopPropagation(); setActivities(activities.filter((_, i) => i !== idx)); }} className="absolute top-10 right-10 text-gray-300 hover:text-red-500 font-bold text-[10px] uppercase tracking-widest transition-colors">DELETE</button>
-                      <div className="space-y-3">
-                        <label className="text-[10px] font-black uppercase text-gray-400 tracking-widest">ACTIVITY NAME</label>
-                        <input className="text-xl font-black w-full bg-gray-50 rounded-2xl px-6 py-4 border-none outline-none" value={act.title} onChange={e => {
-                          const n = [...activities]; n[idx].title = e.target.value; setActivities(n);
-                        }} />
-                      </div>
-                      <div className="space-y-3">
-                        <label className="text-[10px] font-black uppercase text-gray-400 tracking-widest">INSTRUCTIONS</label>
-                        <textarea className="w-full bg-gray-50 rounded-2xl p-6 text-sm min-h-[150px] resize-none outline-none font-medium leading-relaxed" value={act.instructions} onChange={e => {
-                          const n = [...activities]; n[idx].instructions = e.target.value; setActivities(n);
-                        }} />
-                      </div>
+                    <div key={idx} className="bg-white border border-gray-100 rounded-[56px] p-10 shadow-sm space-y-6 relative">
+                      <button onClick={() => setActivities(activities.filter((_, i) => i !== idx))} className="absolute top-10 right-10 text-gray-300 hover:text-red-500 font-bold text-[10px] uppercase tracking-widest transition-colors">DELETE</button>
+                      <input placeholder="Activity Title" className="text-xl font-black w-full bg-gray-50 rounded-2xl px-6 py-4 border-none outline-none" value={act.title} onChange={e => {
+                        const n = [...activities]; n[idx].title = e.target.value; setActivities(n);
+                      }} />
+                      <textarea placeholder="Step-by-step instructions..." className="w-full bg-gray-50 rounded-2xl p-6 text-sm min-h-[150px] resize-none outline-none font-medium leading-relaxed" value={act.instructions} onChange={e => {
+                        const n = [...activities]; n[idx].instructions = e.target.value; setActivities(n);
+                      }} />
                     </div>
                   ))}
                 </div>
               </div>
 
-              {/* VIDEOS & MEDIA */}
               <div className="space-y-8">
-                <div className="flex items-center justify-between">
-                  <SectionHeader title="Videos & Media" />
-                  <button onClick={() => setVideos([...videos, { title: '', url: '', provider: 'youtube' }])} className="bg-[#003882] text-white px-8 py-3 rounded-full text-xs font-black uppercase tracking-widest shadow-lg hover:bg-[#003882]/90 transition-all">+ ADD VIDEO LINK</button>
-                </div>
+                <SectionHeader title="Videos & Media" />
+                <button onClick={() => setVideos([...videos, { title: '', url: '', provider: 'youtube' }])} className="bg-[#003882] text-white px-8 py-3 rounded-full text-xs font-black uppercase tracking-widest shadow-lg hover:bg-[#003882]/90 transition-all">+ ADD VIDEO</button>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
                   {videos.map((vid, idx) => (
-                    <div key={idx} className="bg-white border border-gray-100 rounded-[56px] p-10 shadow-sm space-y-6 relative group">
-                      <button onClick={(e) => { e.stopPropagation(); setVideos(videos.filter((_, i) => i !== idx)); }} className="absolute top-10 right-10 text-gray-300 hover:text-red-500 font-bold text-[10px] uppercase tracking-widest transition-colors">REMOVE</button>
-                      <div className="space-y-3">
-                        <label className="text-[10px] font-black uppercase text-gray-400 tracking-widest">VIDEO TITLE</label>
-                        <input className="text-sm font-bold w-full bg-gray-50 rounded-2xl px-6 py-4 border-none outline-none" value={vid.title} onChange={e => {
-                          const n = [...videos]; n[idx].title = e.target.value; setVideos(n);
-                        }} />
-                      </div>
-                      <div className="space-y-3">
-                        <label className="text-[10px] font-black uppercase text-gray-400 tracking-widest">URL (YOUTUBE/VIMEO)</label>
-                        <input className="text-sm font-medium w-full bg-gray-50 rounded-2xl px-6 py-4 border-none outline-none text-blue-600" value={vid.url} onChange={e => {
-                          const n = [...videos]; n[idx].url = e.target.value; setVideos(n);
-                        }} />
-                      </div>
+                    <div key={idx} className="bg-white border border-gray-100 rounded-[56px] p-10 shadow-sm space-y-6 relative">
+                      <button onClick={() => setVideos(videos.filter((_, i) => i !== idx))} className="absolute top-10 right-10 text-gray-300 hover:text-red-500 font-bold text-[10px] uppercase tracking-widest transition-colors">REMOVE</button>
+                      <input placeholder="Video Title" className="text-sm font-bold w-full bg-gray-50 rounded-2xl px-6 py-4 border-none outline-none" value={vid.title} onChange={e => {
+                        const n = [...videos]; n[idx].title = e.target.value; setVideos(n);
+                      }} />
+                      <input placeholder="YouTube or Vimeo URL" className="text-sm font-medium w-full bg-gray-50 rounded-2xl px-6 py-4 border-none outline-none text-blue-600" value={vid.url} onChange={e => {
+                        const n = [...videos]; n[idx].url = e.target.value; setVideos(n);
+                      }} />
                     </div>
                   ))}
                 </div>
               </div>
 
-              {/* ATTACHMENTS & RESOURCES */}
               <div className="space-y-8">
-                <div className="flex items-center justify-between">
-                  <SectionHeader title="Attachments & Resources" />
-                  <button 
-                    onClick={() => setAttachments([...attachments, { name: '', storage_path: '', type: 'pdf' }])} 
-                    className="bg-[#EF4E92] text-white px-8 py-3 rounded-full text-xs font-black uppercase tracking-widest shadow-lg hover:bg-[#EF4E92]/90 transition-all"
-                  >
-                    + ADD FILE LINK
-                  </button>
-                </div>
+                <SectionHeader title="Resources & Downloads" />
+                <button onClick={() => setAttachments([...attachments, { name: '', storage_path: '', type: 'pdf' }])} className="bg-[#EF4E92] text-white px-8 py-3 rounded-full text-xs font-black uppercase tracking-widest shadow-lg hover:bg-[#EF4E92]/90 transition-all">+ ADD RESOURCE</button>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
                   {attachments.map((att, idx) => (
-                    <div key={idx} className="bg-white border border-gray-100 rounded-[56px] p-10 shadow-sm space-y-6 relative group">
-                      <button 
-                        onClick={(e) => { e.stopPropagation(); setAttachments(attachments.filter((_, i) => i !== idx)); }} 
-                        className="absolute top-10 right-10 text-gray-300 hover:text-red-500 font-bold text-[10px] uppercase tracking-widest transition-colors"
-                      >
-                        REMOVE
-                      </button>
-                      <div className="space-y-3">
-                        <label className="text-[10px] font-black uppercase text-gray-400 tracking-widest">FILE TITLE</label>
-                        <input 
-                          className="text-sm font-bold w-full bg-gray-50 rounded-2xl px-6 py-4 border-none outline-none" 
-                          value={att.name || ''} 
-                          onChange={e => {
-                            const n = [...attachments]; n[idx].name = e.target.value; setAttachments(n);
-                          }} 
-                          placeholder="Ex: Coloring Sheet"
-                        />
-                      </div>
-                      <div className="space-y-3">
-                        <label className="text-[10px] font-black uppercase text-gray-400 tracking-widest">FILE URL</label>
-                        <input 
-                          className="text-sm font-medium w-full bg-gray-50 rounded-2xl px-6 py-4 border-none outline-none text-blue-600" 
-                          value={att.storage_path || ''} 
-                          onChange={e => {
-                            const n = [...attachments]; n[idx].storage_path = e.target.value; setAttachments(n);
-                          }} 
-                          placeholder="https://..."
-                        />
-                      </div>
+                    <div key={idx} className="bg-white border border-gray-100 rounded-[56px] p-10 shadow-sm space-y-6 relative">
+                      <button onClick={() => setAttachments(attachments.filter((_, i) => i !== idx))} className="absolute top-10 right-10 text-gray-300 hover:text-red-500 font-bold text-[10px] uppercase tracking-widest transition-colors">REMOVE</button>
+                      <input placeholder="Resource Name (e.g. Coloring Sheet)" className="text-sm font-bold w-full bg-gray-50 rounded-2xl px-6 py-4 border-none outline-none" value={att.name || ''} onChange={e => {
+                        const n = [...attachments]; n[idx].name = e.target.value; setAttachments(n);
+                      }} />
+                      <input placeholder="URL to PDF/Image" className="text-sm font-medium w-full bg-gray-50 rounded-2xl px-6 py-4 border-none outline-none text-blue-600" value={att.storage_path || ''} onChange={e => {
+                        const n = [...attachments]; n[idx].storage_path = e.target.value; setAttachments(n);
+                      }} />
                     </div>
                   ))}
                 </div>
               </div>
-
             </div>
           )}
         </div>

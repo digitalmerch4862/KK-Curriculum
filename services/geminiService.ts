@@ -6,7 +6,6 @@ import { GoogleGenAI, Type } from "@google/genai";
  */
 
 export const generateLessonSummary = async (content: string) => {
-  // Always use process.env.API_KEY directly when initializing.
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   const response = await ai.models.generateContent({
     model: 'gemini-3-flash-preview',
@@ -35,7 +34,6 @@ export const categorizeLessonTitle = async (title: string) => {
   });
   
   const result = response.text?.trim().toUpperCase() || "HISTORY";
-  // Validate that the returned string matches one in our list
   return categories.find(c => result.includes(c)) || "HISTORY";
 };
 
@@ -55,6 +53,7 @@ export const generateFullLesson = async (goal: string, existingContext: string) 
     
     Structure your response as a valid JSON object with:
     - title: A compelling lesson title.
+    - summary: A 2-sentence teacher overview.
     - read: Array of objects { title, content }
     - teach: Array of objects { title, content }
     - engage: Array of objects { title, content }
@@ -69,11 +68,12 @@ export const generateFullLesson = async (goal: string, existingContext: string) 
         type: Type.OBJECT,
         properties: {
           title: { type: Type.STRING },
+          summary: { type: Type.STRING },
           read: { type: Type.ARRAY, items: { type: Type.OBJECT, properties: { title: { type: Type.STRING }, content: { type: Type.STRING } } } },
           teach: { type: Type.ARRAY, items: { type: Type.OBJECT, properties: { title: { type: Type.STRING }, content: { type: Type.STRING } } } },
           engage: { type: Type.ARRAY, items: { type: Type.OBJECT, properties: { title: { type: Type.STRING }, content: { type: Type.STRING } } } },
         },
-        required: ["title", "read", "teach", "engage"]
+        required: ["title", "summary", "read", "teach", "engage"]
       }
     }
   });
