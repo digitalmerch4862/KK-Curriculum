@@ -1,17 +1,12 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { Section } from './LessonTextTab.tsx';
 
+// Interface para sa props ng controller
 interface TTSControllerProps {
-  sections: Section[];
+  sections: any[];
+  onActiveIdChange?: (id: string | null) => void; // Para sa visual highlighting sa cards
 }
 
-interface ReadingItem {
-  id: string;
-  label: string;
-  text: string;
-}
-
-const TTSController: React.FC<TTSControllerProps> = ({ sections }) => {
+const TTSController: React.FC<TTSControllerProps> = ({ sections, onActiveIdChange }) => {
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentIndex, setCurrentIndex] = useState(-1);
   const synth = window.speechSynthesis;
@@ -21,7 +16,7 @@ const TTSController: React.FC<TTSControllerProps> = ({ sections }) => {
   const activeSectionIdRef = useRef<string | null>(null);
   const isAutoScrollingRef = useRef(false);
 
-  // 1. Intersection Observer para malaman kung ano ang nasa screen
+  // 1. Monitor kung anong section ang pinaka-visible sa screen
   useEffect(() => {
     observerRef.current = new IntersectionObserver(
       (entries) => {
@@ -34,7 +29,7 @@ const TTSController: React.FC<TTSControllerProps> = ({ sections }) => {
       { threshold: 0.5, rootMargin: "-10% 0px -40% 0px" } 
     );
 
-    sections.forEach(s => s.subsections.forEach(sub => {
+    sections.forEach(s => s.subsections?.forEach((sub: any) => {
       const el = document.getElementById(sub.id);
       if (el) observerRef.current?.observe(el);
     }));
@@ -42,10 +37,11 @@ const TTSController: React.FC<TTSControllerProps> = ({ sections }) => {
     return () => observerRef.current?.disconnect();
   }, [sections]);
 
+  // 2. I-flatten ang sections para sa playlist (Title then Content)
   const playlist = useMemo(() => {
-    const list: ReadingItem[] = [];
+    const list: { id: string; label: string; text: string }[] = [];
     sections.forEach((section) => {
-      section.subsections.forEach((sub) => {
+      section.subsections?.forEach((sub: any) => {
         list.push({ id: sub.id, label: sub.title, text: sub.title });
         list.push({ id: sub.id, label: sub.title, text: sub.content });
       });
@@ -62,7 +58,8 @@ const TTSController: React.FC<TTSControllerProps> = ({ sections }) => {
     isPlayingRef.current = false;
     setIsPlaying(false);
     setCurrentIndex(-1);
-  }, [synth]);
+    if (onActiveIdChange) onActiveIdChange(null);
+  }, [synth, onActiveIdChange]);
 
   const playSegment = useCallback((index: number) => {
     if (index >= playlist.length || !isPlayingRef.current) {
@@ -75,17 +72,16 @@ const TTSController: React.FC<TTSControllerProps> = ({ sections }) => {
     if (!cleanText) { playSegment(index + 1); return; }
 
     setCurrentIndex(index);
+    if (onActiveIdChange) onActiveIdChange(item.id);
 
-    // FIX: Mas accurate na auto-scroll logic
+    // AUTO-SCROLL logic: Laging centered ang active card
     const isNewSection = index === 0 || playlist[index - 1].id !== item.id;
     if (isNewSection) {
       const element = document.getElementById(item.id);
       if (element) {
         isAutoScrollingRef.current = true;
-        // Ginamit ang 'center' para laging nasa gitna ang binabasa
         element.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        
-        // Timeout para i-reset ang flag pagkatapos ng scroll animation
+        // Timer para i-reset ang flag pagkatapos ng scroll animation
         setTimeout(() => { isAutoScrollingRef.current = false; }, 1000);
       }
     }
@@ -93,25 +89,21 @@ const TTSController: React.FC<TTSControllerProps> = ({ sections }) => {
     const utterance = new SpeechSynthesisUtterance(cleanText);
     utterance.rate = 0.95;
 
-    // Tuloy-tuloy na pagbabasa (Recursive Playlist Logic)
+    // Recursive callback para tuloy-tuloy ang pagbasa
     utterance.onend = () => {
       if (isPlayingRef.current) {
-        setTimeout(() => playSegment(index + 1), 400); // Mas mabilis na transition
+        setTimeout(() => playSegment(index + 1), 400);
       }
     };
 
     synth.speak(utterance);
-  }, [playlist, stop, synth]);
+  }, [playlist, stop, synth, onActiveIdChange]);
 
-  // 2. Manual Scroll Detection: Titigil ang audio kapag ginalaw ng user ang screen
+  // 3. Manual Scroll Detection: Titigil ang audio pag ginalaw ng user ang screen
   const handleUserInteraction = useCallback(() => {
     if (!isPlayingRef.current || isAutoScrollingRef.current) return;
-
-    // Kapag naramdaman ang manual scroll o touch, stop agad
-    synth.cancel();
-    setIsPlaying(false); 
-    isPlayingRef.current = false; 
-  }, [synth]);
+    stop(); // Titigil agad ang reading mode
+  }, [stop]);
 
   useEffect(() => {
     window.addEventListener('wheel', handleUserInteraction, { passive: true });
@@ -129,8 +121,7 @@ const TTSController: React.FC<TTSControllerProps> = ({ sections }) => {
       isPlayingRef.current = true;
       setIsPlaying(true);
       synth.cancel();
-      
-      // Magsisimula sa kung ano ang kasalukuyang nasa gitna ng screen
+      // Simulan sa kung ano ang kasalukuyang nasa screen
       const startIndex = playlist.findIndex(item => item.id === activeSectionIdRef.current);
       playSegment(startIndex !== -1 ? startIndex : 0);
     }
@@ -141,7 +132,9 @@ const TTSController: React.FC<TTSControllerProps> = ({ sections }) => {
       {isPlaying && (
         <div className="bg-white/95 backdrop-blur-md px-4 py-2 rounded-xl shadow-xl border border-pink-100 flex items-center gap-2">
           <div className="w-2 h-2 bg-[#EF4E92] rounded-full animate-ping"></div>
-          <span className="text-[10px] font-black text-[#EF4E92] uppercase">Reading...</span>
+          <span className="text-[10px] font-black text-[#EF4E92] uppercase tracking-widest">
+            Assistant Reading
+          </span>
         </div>
       )}
       <button
@@ -151,9 +144,13 @@ const TTSController: React.FC<TTSControllerProps> = ({ sections }) => {
         }`}
       >
         {isPlaying ? (
-          <svg className="w-6 h-6 text-white" fill="currentColor" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2" /></svg>
+          <svg className="w-6 h-6 text-white" fill="currentColor" viewBox="0 0 24 24">
+            <rect x="6" y="6" width="12" height="12" rx="2" />
+          </svg>
         ) : (
-          <svg className="w-8 h-8 text-white ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M15.536 8.464a5 5 0 010 7.072M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707L12 5z" /></svg>
+          <svg className="w-8 h-8 text-white ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M15.536 8.464a5 5 0 010 7.072M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707L12 5z" />
+          </svg>
         )}
       </button>
     </div>
