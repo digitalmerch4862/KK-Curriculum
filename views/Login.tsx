@@ -1,6 +1,5 @@
-
 import React from 'react';
-import { UserRole, Profile } from '../types';
+import { UserRole, Profile } from '../types.ts';
 
 interface LoginProps {
   onLogin: (profile: Profile) => void;
