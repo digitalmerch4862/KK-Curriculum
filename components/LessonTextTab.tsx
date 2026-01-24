@@ -153,7 +153,7 @@ const LessonTextTab: React.FC<LessonTextTabProps> = ({ content, activeReadingId 
                   id={sub.id} 
                   className={`bg-white rounded-[40px] p-8 md:p-10 shadow-sm border-4 transition-all group scroll-mt-32 duration-500 ${
                     isActive 
-                    ? 'border-[#EF4E92] shadow-2xl scale-[1.01] ring-8 ring-pink-50' 
+                    ? 'border-[#EF4E92] border-4 ring-8 ring-pink-50 shadow-2xl scale-[1.01]' 
                     : 'border-gray-50 hover:shadow-md'
                   }`}
                 >
