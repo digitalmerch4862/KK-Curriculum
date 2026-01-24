@@ -1,9 +1,8 @@
-
 import React, { useState, useEffect, useMemo } from 'react';
 import { db } from '../services/supabaseService.ts';
 import { Lesson, UserRole, Profile, LessonContentStructure, LessonVideo, Attachment } from '../types.ts';
 import { 
-  X, ArrowLeft, ChevronRight, Home, Menu, Download, FileText, Play, Eye, Search, BookOpen, GraduationCap, Users, CheckCircle2
+  X, ArrowLeft, ChevronRight, Home, Menu, Download, FileText, Play, Eye, Search, BookOpen, GraduationCap, Users, CheckCircle2, Printer
 } from 'lucide-react';
 import TTSController from '../components/TTSController.tsx';
 
@@ -121,10 +120,19 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
     return url;
   };
 
-  const handleDownload = (url: string, filename: string) => {
+  const handleDownload = (e: React.MouseEvent, url: string, filename: string) => {
+    // Stop propagation to prevent bubbling issues on mobile
+    e.stopPropagation();
+    
     const downloadUrl = getDownloadUrl(url);
-    // On mobile, window.open is often more reliable for triggering system-level download/open handlers
+    // Open in a new tab - this is the most reliable way to trigger a "download" or "open in app" behavior
+    // on mobile devices without navigating away from the React app state.
     window.open(downloadUrl, '_blank');
+  };
+
+  const handlePreviewOpen = (e: React.MouseEvent, att: Attachment) => {
+    e.stopPropagation();
+    setViewingResource(att);
   };
 
   const filteredLessons = lessons.filter(l => 
@@ -158,21 +166,36 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
 
       {/* --- RESOURCE PREVIEW MODAL --- */}
       {viewingResource && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/95 backdrop-blur-md p-0 md:p-6 overflow-hidden">
+        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-slate-900/95 backdrop-blur-md p-0 md:p-6 overflow-hidden">
           <div className="bg-white w-full h-full md:max-w-6xl md:h-[90vh] md:rounded-[40px] overflow-hidden flex flex-col shadow-2xl animate-in zoom-in-95 duration-300">
-            <div className="px-4 py-4 md:px-8 md:py-6 border-b flex items-center justify-between bg-white sticky top-0 z-[110]">
+            {/* Modal Header */}
+            <div className="px-4 py-4 md:px-8 md:py-6 border-b flex items-center justify-between bg-white sticky top-0 z-[210]">
               <div className="flex items-center gap-3 min-w-0">
                 <FileText className="text-[#EF4E92] shrink-0" size={24} />
                 <h3 className="font-black text-sm md:text-xl truncate text-[#003882]">{viewingResource.name}</h3>
               </div>
-              <div className="flex items-center gap-3 shrink-0">
+              <div className="flex items-center gap-2 md:gap-3 shrink-0">
+                
+                {/* Print Button */}
                 <button 
                   type="button"
-                  onClick={() => handleDownload(viewingResource.storage_path, viewingResource.name)} 
+                  onClick={(e) => handleDownload(e, viewingResource.storage_path, viewingResource.name)} 
+                  className="bg-white text-[#003882] border border-[#003882]/20 p-3 md:px-6 md:py-3 rounded-2xl md:rounded-full text-[10px] font-black uppercase tracking-widest flex items-center gap-2 hover:bg-slate-50 active:scale-95 transition-all shadow-sm"
+                  title="Print Resource"
+                >
+                  <Printer size={18} /> <span className="hidden md:inline">Print</span>
+                </button>
+
+                {/* Download Button */}
+                <button 
+                  type="button"
+                  onClick={(e) => handleDownload(e, viewingResource.storage_path, viewingResource.name)} 
                   className="bg-[#003882] text-white p-3 md:px-6 md:py-3 rounded-2xl md:rounded-full text-[10px] font-black uppercase tracking-widest flex items-center gap-2 hover:bg-[#002b66] active:scale-95 transition-all shadow-lg shadow-blue-100"
                 >
                   <Download size={18} /> <span className="hidden md:inline">Download</span>
                 </button>
+
+                {/* Close Button */}
                 <button 
                   type="button"
                   onClick={() => setViewingResource(null)} 
@@ -182,10 +205,12 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
                 </button>
               </div>
             </div>
-            <div className="flex-1 w-full bg-slate-50 relative">
+            
+            {/* Modal Body / Iframe */}
+            <div className="flex-1 w-full bg-slate-50 relative overflow-hidden">
               <iframe 
                 src={getViewableUrl(viewingResource.storage_path)} 
-                className="w-full h-full border-none bg-white" 
+                className="w-full h-full border-none bg-white touch-auto" 
                 title="Resource Preview" 
                 allow="autoplay"
               />
@@ -329,18 +354,16 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
             </section>
 
             {/* Resources HUB */}
-            <section id="resource-hub" className="mt-40 scroll-mt-24 pb-40">
+            <section id="resource-hub" className="mt-40 scroll-mt-24 pb-80 md:pb-40">
               <div className="flex items-center gap-3 mb-12">
                 <div className="h-10 w-2 bg-[#003882] rounded-full"></div>
                 <h3 className="text-3xl font-black text-[#003882] uppercase tracking-tighter">Resources</h3>
               </div>
               <div className="grid grid-cols-1 gap-6">
                 {selectedLesson.attachments?.map((att, i) => (
-                  <div key={i} className="bg-white rounded-[40px] p-5 md:p-8 flex items-center justify-between border border-slate-100 shadow-sm hover:shadow-xl transition-all group relative overflow-visible">
+                  <div key={i} className="bg-white rounded-[40px] p-5 md:p-8 flex items-center justify-between border border-slate-100 shadow-sm hover:shadow-xl transition-all group relative overflow-visible z-10">
                     <div className="flex items-center gap-4 md:gap-6 min-w-0 flex-1">
-                      <div className="bg-slate-50 p-4 rounded-3xl text-slate-400 group-hover:bg-pink-50 group-hover:text-[#EF4E92] transition-colors shrink-0">
-                        <FileText size={24} />
-                      </div>
+                      {/* Removed the doc icon div here as requested */}
                       <div className="min-w-0 flex-1">
                         <h4 className="font-black text-slate-800 text-xs md:text-base truncate pr-2" title={att.name}>{att.name}</h4>
                         <p className="text-[9px] text-slate-400 font-bold uppercase tracking-widest mt-1">Ready to access</p>
@@ -349,16 +372,16 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
                     <div className="flex gap-3 shrink-0 ml-4 relative z-20">
                       <button 
                         type="button"
-                        onClick={() => setViewingResource(att)} 
-                        className="p-4 bg-slate-50 text-[#EF4E92] rounded-2xl hover:bg-pink-50 transition-all active:scale-90 border border-pink-100 shadow-sm"
+                        onClick={(e) => handlePreviewOpen(e, att)}
+                        className="p-4 bg-slate-50 text-[#EF4E92] rounded-2xl hover:bg-pink-50 transition-all active:scale-90 border border-pink-100 shadow-sm cursor-pointer"
                         title="View in App"
                       >
                         <Eye size={22} />
                       </button>
                       <button 
                         type="button"
-                        onClick={() => handleDownload(att.storage_path, att.name)} 
-                        className="p-4 bg-blue-50 text-[#003882] rounded-2xl hover:bg-blue-100 transition-all active:scale-90 border border-blue-100 shadow-sm"
+                        onClick={(e) => handleDownload(e, att.storage_path, att.name)} 
+                        className="p-4 bg-blue-50 text-[#003882] rounded-2xl hover:bg-blue-100 transition-all active:scale-90 border border-blue-100 shadow-sm cursor-pointer"
                         title="Download File"
                       >
                         <Download size={22} />
