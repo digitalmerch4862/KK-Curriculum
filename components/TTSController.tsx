@@ -1,7 +1,7 @@
-import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { Section } from './LessonTextTab.tsx';
-import { generateTTS } from '../services/geminiService.ts';
-import { X, Play } from 'lucide-react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import { Section } from "./LessonTextTab.tsx";
+import { generateTTS } from "../services/geminiService.ts";
+import { X, Play } from "lucide-react";
 
 interface TTSControllerProps {
   sections: Section[];
@@ -15,60 +15,64 @@ interface ReadingItem {
   text: string;
 }
 
-// Manual base64 decoding as per system guidelines (no external libs)
+// Manual base64 decoding (no external libs)
 function decodeBase64(base64: string): Uint8Array {
   const binaryString = atob(base64);
   const len = binaryString.length;
   const bytes = new Uint8Array(len);
-  for (let i = 0; i < len; i++) {
-    bytes[i] = binaryString.charCodeAt(i);
-  }
+  for (let i = 0; i < len; i++) bytes[i] = binaryString.charCodeAt(i);
   return bytes;
 }
 
-// Manual Raw PCM Decoding for Gemini TTS (Raw 16-bit PCM, 24kHz)
-// Native decodeAudioData fails on raw PCM without headers.
+// Decode raw 16-bit PCM (little-endian), 24kHz, mono by default
 async function decodeRawPCM(
   data: Uint8Array,
   ctx: AudioContext,
   sampleRate: number = 24000,
   numChannels: number = 1
 ): Promise<AudioBuffer> {
-  const dataInt16 = new Int16Array(data.buffer);
-  const frameCount = dataInt16.length / numChannels;
+  const view = new DataView(data.buffer, data.byteOffset, data.byteLength);
+
+  const totalSamples = Math.floor(view.byteLength / 2); // 2 bytes per int16
+  const frameCount = Math.floor(totalSamples / numChannels);
+
   const buffer = ctx.createBuffer(numChannels, frameCount, sampleRate);
 
   for (let channel = 0; channel < numChannels; channel++) {
     const channelData = buffer.getChannelData(channel);
     for (let i = 0; i < frameCount; i++) {
-      // Convert 16-bit PCM to float normalized between -1 and 1
-      channelData[i] = dataInt16[i * numChannels + channel] / 32768.0;
+      const sampleIndex = i * numChannels + channel;
+      const byteIndex = sampleIndex * 2;
+      const int16 = view.getInt16(byteIndex, true); // little-endian
+      channelData[i] = int16 / 32768;
     }
   }
+
   return buffer;
 }
 
-const TTSController: React.FC<TTSControllerProps> = ({ 
-  sections, 
+const TTSController: React.FC<TTSControllerProps> = ({
+  sections,
   onActiveIdChange,
-  onPlayingStatusChange 
+  onPlayingStatusChange,
 }) => {
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentIndex, setCurrentIndex] = useState(-1);
   const [isLoading, setIsLoading] = useState(false);
-  
+
   const audioContextRef = useRef<AudioContext | null>(null);
   const currentSourceRef = useRef<AudioBufferSourceNode | null>(null);
   const isPlayingRef = useRef(false);
 
-  const VOICE_NAME = 'kore'; 
+  // You can keep this lowercase; geminiService will normalize voice name.
+  const VOICE_NAME = "kore";
 
-  // Create a flat playlist for the narration engine
+  // Create a flat playlist for narration
   const playlist = useMemo(() => {
     const list: ReadingItem[] = [];
     sections.forEach((section) => {
       section.subsections.forEach((sub) => {
-        // Queue Title then Content for natural Videoke flow
+        // Queue Title then Content
         list.push({ id: sub.id, label: sub.title, text: sub.title });
         list.push({ id: sub.id, label: sub.title, text: sub.content });
       });
@@ -78,9 +82,10 @@ const TTSController: React.FC<TTSControllerProps> = ({
 
   const initAudioContext = useCallback(async () => {
     if (!audioContextRef.current) {
-      audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
+      audioContextRef.current = new (window.AudioContext ||
+        (window as any).webkitAudioContext)({ sampleRate: 24000 });
     }
-    if (audioContextRef.current.state === 'suspended') {
+    if (audioContextRef.current.state === "suspended") {
       await audioContextRef.current.resume();
     }
     return audioContextRef.current;
@@ -90,110 +95,124 @@ const TTSController: React.FC<TTSControllerProps> = ({
     if (currentSourceRef.current) {
       try {
         currentSourceRef.current.stop();
-      } catch (e) {
-        // Already stopped
+      } catch {
+        // ignore
       }
       currentSourceRef.current = null;
     }
+
     isPlayingRef.current = false;
     setIsPlaying(false);
+    setIsLoading(false);
     onPlayingStatusChange?.(false);
     setCurrentIndex(-1);
-    if (onActiveIdChange) onActiveIdChange(null);
+    onActiveIdChange?.(null);
   }, [onActiveIdChange, onPlayingStatusChange]);
 
-  const playSegment = useCallback(async (index: number) => {
-    if (index >= playlist.length || !isPlayingRef.current) {
-      stop();
-      return;
-    }
-
-    const item = playlist[index];
-    
-    // SMART STOP LOGIC: Automatically terminate if section contains "Craft"
-    if (item.label.toLowerCase().includes('craft')) {
-      console.info("Smart Stop: Detected 'Craft' section. Terminating narration.");
-      stop();
-      return;
-    }
-
-    // ROBUST TEXT VALIDATION for TTS API
-    let sanitizedText = item.text.trim();
-    
-    // Skip empty or too short text
-    if (!sanitizedText || sanitizedText.length < 10) {
-      console.log(`Skipping short text: "${sanitizedText}"`);
-      playSegment(index + 1);
-      return;
-    }
-    
-    // Remove problematic characters that TTS might reject
-    sanitizedText = sanitizedText
-      .replace(/[\u2018\u2019]/g, "'") // Replace smart quotes
-      .replace(/[\u201C\u201D]/g, '"') // Replace smart double quotes
-      .replace(/[\u2013\u2014]/g, '-') // Replace em/en dashes
-      .replace(/[^\w\s.,!?;:'\-()&]/g, ' ') // Keep only safe characters
-      .replace(/\s+/g, ' ') // Normalize whitespace
-      .trim();
-    
-    // Double-check after cleaning
-    if (!sanitizedText || sanitizedText.length < 10) {
-      console.log(`Text too short after sanitization: "${sanitizedText}"`);
-      playSegment(index + 1);
-      return;
-    }
-    
-    // Ensure text ends with punctuation for natural speech
-    if (!/[.!?]$/.test(sanitizedText)) {
-      sanitizedText += '.';
-    }
-
-    setIsLoading(true);
-    setCurrentIndex(index);
-    onActiveIdChange?.(item.id);
-
-    try {
-      const base64Audio = await generateTTS(sanitizedText, VOICE_NAME);
-      
-      if (!base64Audio || !isPlayingRef.current) {
-        setIsLoading(false);
-        if (isPlayingRef.current) playSegment(index + 1);
+  const playSegment = useCallback(
+    async (index: number) => {
+      if (index >= playlist.length || !isPlayingRef.current) {
+        stop();
         return;
       }
 
-      const ctx = await initAudioContext();
-      const rawBytes = decodeBase64(base64Audio);
-      const audioBuffer = await decodeRawPCM(rawBytes, ctx, 24000, 1);
-      
-      const source = ctx.createBufferSource();
-      source.buffer = audioBuffer;
-      source.connect(ctx.destination);
-      currentSourceRef.current = source;
-      
-      setIsLoading(false);
+      const item = playlist[index];
 
-      // VIDEOKE AUTO-SCROLL: Keep focused item in the center
-      const element = document.getElementById(item.id);
-      if (element) {
-        element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      // ✅ SMART SKIP: If section contains "Craft", skip instead of terminating narration
+      if (item.label.toLowerCase().includes("craft")) {
+        console.info("Smart Skip: Detected 'Craft' section. Skipping narration for this segment.");
+        playSegment(index + 1);
+        return;
       }
 
-      source.onended = () => {
-        if (isPlayingRef.current && currentSourceRef.current === source) {
-          playSegment(index + 1);
+      // Identify whether this is a "title item" (short step label)
+      const isTitleItem = item.text === item.label;
+
+      // ROBUST TEXT VALIDATION for TTS
+      let sanitizedText = (item.text || "").trim();
+
+      // If title is short (READ/PRAY/etc), pad to make it speakable
+      if (isTitleItem && sanitizedText.length > 0 && sanitizedText.length < 10) {
+        sanitizedText = `Next step: ${sanitizedText}`;
+      }
+
+      // Skip empty text
+      if (!sanitizedText) {
+        playSegment(index + 1);
+        return;
+      }
+
+      // Clean problematic characters
+      sanitizedText = sanitizedText
+        .replace(/[\u2018\u2019]/g, "'")
+        .replace(/[\u201C\u201D]/g, '"')
+        .replace(/[\u2013\u2014]/g, "-")
+        .replace(/[^\w\s.,!?;:'\-()&]/g, " ")
+        .replace(/\s+/g, " ")
+        .trim();
+
+      // If still too short after cleaning, skip
+      if (sanitizedText.length < 2) {
+        playSegment(index + 1);
+        return;
+      }
+
+      // Ensure ending punctuation
+      if (!/[.!?]$/.test(sanitizedText)) {
+        sanitizedText += ".";
+      }
+
+      setIsLoading(true);
+      setCurrentIndex(index);
+      onActiveIdChange?.(item.id);
+
+      try {
+        const base64Audio = await generateTTS(sanitizedText, VOICE_NAME);
+
+        // If TTS returned nothing, skip forward
+        if (!base64Audio || !isPlayingRef.current) {
+          setIsLoading(false);
+          if (isPlayingRef.current) playSegment(index + 1);
+          return;
         }
-      };
-      source.start();
-    } catch (error) {
-      console.error("Narrator Error:", error);
-      console.warn(`Skipping problematic text: "${item.text.substring(0, 50)}..."`);
-      setIsLoading(false);
-      // Continue to next segment even on error
-      if (isPlayingRef.current) {
-        setTimeout(() => playSegment(index + 1), 500);
+
+        const ctx = await initAudioContext();
+
+        const rawBytes = decodeBase64(base64Audio);
+        const audioBuffer = await decodeRawPCM(rawBytes, ctx, 24000, 1);
+
+        const source = ctx.createBufferSource();
+        source.buffer = audioBuffer;
+        source.connect(ctx.destination);
+        currentSourceRef.current = source;
+
+        setIsLoading(false);
+
+        // Auto-scroll to active section
+        const element = document.getElementById(item.id);
+        if (element) {
+          element.scrollIntoView({ behavior: "smooth", block: "center" });
+        }
+
+        source.onended = () => {
+          if (isPlayingRef.current && currentSourceRef.current === source) {
+            playSegment(index + 1);
+          }
+        };
+
+        source.start();
+      } catch (error) {
+        console.error("Narrator Error:", error);
+        setIsLoading(false);
+
+        // Continue to next segment even on error
+        if (isPlayingRef.current) {
+          setTimeout(() => playSegment(index + 1), 300);
+        }
       }
-    }
-  }, [playlist, stop, onActiveIdChange, initAudioContext]);
+    },
+    [playlist, stop, onActiveIdChange, initAudioContext]
+  );
 
   const handleToggle = async () => {
     if (isPlaying) {
@@ -221,9 +240,11 @@ const TTSController: React.FC<TTSControllerProps> = ({
             <div className="w-1.5 bg-pink-300 rounded-full animate-bounce [animation-duration:0.6s] [animation-delay:0.2s]"></div>
           </div>
           <div className="flex flex-col">
-            <span className="text-[9px] font-black uppercase tracking-[0.2em] text-[#EF4E92]">Narrator Active</span>
+            <span className="text-[9px] font-black uppercase tracking-[0.2em] text-[#EF4E92]">
+              Narrator Active
+            </span>
             <span className="text-xs font-bold text-slate-800 uppercase truncate max-w-[150px]">
-              {isLoading ? 'Processing Voice...' : 'Reading Lesson'}
+              {isLoading ? "Processing Voice..." : "Reading Lesson"}
             </span>
           </div>
         </div>
@@ -232,14 +253,17 @@ const TTSController: React.FC<TTSControllerProps> = ({
       <button
         onClick={handleToggle}
         className={`w-16 h-16 rounded-full shadow-2xl flex items-center justify-center transition-all transform hover:scale-110 active:scale-95 border-4 border-white ${
-          isPlaying ? 'bg-red-500' : 'bg-[#EF4E92]'
+          isPlaying ? "bg-red-500" : "bg-[#EF4E92]"
         }`}
         title={isPlaying ? "Stop Narrator" : "Start Videoke Guide"}
       >
+        {/* ✅ Fixed icon logic: show spinner only when playing + loading */}
         {isPlaying ? (
-          <X className="text-white" size={24} strokeWidth={3} />
-        ) : isLoading && isPlaying ? (
-          <div className="w-6 h-6 border-4 border-white border-t-transparent rounded-full animate-spin"></div>
+          isLoading ? (
+            <div className="w-6 h-6 border-4 border-white border-t-transparent rounded-full animate-spin"></div>
+          ) : (
+            <X className="text-white" size={24} strokeWidth={3} />
+          )
         ) : (
           <Play className="text-white ml-1 fill-white" size={24} />
         )}

@@ -8,6 +8,11 @@ interface ActivityCardProps {
 }
 
 const ActivityCard: React.FC<ActivityCardProps> = ({ activity }) => {
+  const handleDownload = () => {
+    // Attempting a simple print which on mobile usually brings up the Save as PDF or Share menu
+    window.print();
+  };
+
   return (
     <div className="bg-white border border-gray-100 rounded-[40px] p-8 md:p-10 shadow-sm hover:shadow-xl transition-all group border-b-[12px] border-[#EF4E92]">
       <div className="flex justify-between items-start mb-6">
@@ -39,11 +44,12 @@ const ActivityCard: React.FC<ActivityCardProps> = ({ activity }) => {
       
       <div className="mt-10 pt-6 border-t border-slate-50 flex justify-end">
         <button 
-          onClick={() => window.print()}
-          className="text-[#EF4E92] hover:bg-pink-50 px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest flex items-center gap-2 transition-all border border-transparent hover:border-pink-100"
+          type="button"
+          onClick={handleDownload}
+          className="text-[#EF4E92] hover:bg-pink-50 p-4 md:px-6 md:py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest flex items-center gap-2 transition-all border border-transparent hover:border-pink-100 active:scale-90"
         >
-          <Download size={16} strokeWidth={3} />
-          Save as PDF
+          <Download size={20} strokeWidth={3} />
+          <span className="hidden md:inline">Save as PDF</span>
         </button>
       </div>
     </div>

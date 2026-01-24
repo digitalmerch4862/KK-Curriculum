@@ -89,28 +89,42 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
   };
 
   /**
+   * Helper to extract File ID from Google Drive links
+   */
+  const getDriveFileId = (url: string) => {
+    if (!url) return null;
+    const match = url.match(/\/d\/([^\/]+)/) || url.match(/id=([^&]+)/);
+    return match ? match[1] : null;
+  };
+
+  /**
    * Converts a standard Google Drive share link to a /preview link for embedding in iframes.
    */
   const getViewableUrl = (url: string) => {
     if (!url) return '';
-    if (url.includes('drive.google.com')) {
-      // Extract file ID from drive link
-      const idMatch = url.match(/\/d\/([^\/]+)/);
-      if (idMatch && idMatch[1]) {
-        return `https://drive.google.com/file/d/${idMatch[1]}/preview`;
-      }
+    const fileId = getDriveFileId(url);
+    if (fileId && url.includes('drive.google.com')) {
+      return `https://drive.google.com/file/d/${fileId}/preview`;
+    }
+    return url;
+  };
+
+  /**
+   * Converts a Google Drive link to a direct download link.
+   */
+  const getDownloadUrl = (url: string) => {
+    if (!url) return '';
+    const fileId = getDriveFileId(url);
+    if (fileId && url.includes('drive.google.com')) {
+      return `https://drive.google.com/uc?export=download&id=${fileId}`;
     }
     return url;
   };
 
   const handleDownload = (url: string, filename: string) => {
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = filename;
-    link.target = '_blank';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    const downloadUrl = getDownloadUrl(url);
+    // On mobile, window.open is often more reliable for triggering system-level download/open handlers
+    window.open(downloadUrl, '_blank');
   };
 
   const filteredLessons = lessons.filter(l => 
@@ -142,35 +156,37 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
         />
       )}
 
-      {/* --- RESOURCE PREVIEW (OPEN INSIDE APP) --- */}
+      {/* --- RESOURCE PREVIEW MODAL --- */}
       {viewingResource && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/95 backdrop-blur-md p-0 md:p-4">
-          <div className="bg-white w-full max-w-6xl h-full md:h-[90vh] md:rounded-[40px] overflow-hidden flex flex-col shadow-2xl animate-in zoom-in-95 duration-300">
-            <div className="p-4 md:p-6 border-b flex items-center justify-between bg-white sticky top-0 z-10">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/95 backdrop-blur-md p-0 md:p-6 overflow-hidden">
+          <div className="bg-white w-full h-full md:max-w-6xl md:h-[90vh] md:rounded-[40px] overflow-hidden flex flex-col shadow-2xl animate-in zoom-in-95 duration-300">
+            <div className="px-4 py-4 md:px-8 md:py-6 border-b flex items-center justify-between bg-white sticky top-0 z-[110]">
               <div className="flex items-center gap-3 min-w-0">
-                <FileText className="text-[#EF4E92] shrink-0" />
+                <FileText className="text-[#EF4E92] shrink-0" size={24} />
                 <h3 className="font-black text-sm md:text-xl truncate text-[#003882]">{viewingResource.name}</h3>
               </div>
-              <div className="flex items-center gap-2 shrink-0">
+              <div className="flex items-center gap-3 shrink-0">
                 <button 
+                  type="button"
                   onClick={() => handleDownload(viewingResource.storage_path, viewingResource.name)} 
-                  className="bg-[#003882] text-white px-4 py-2 rounded-full text-[10px] font-black uppercase tracking-widest flex items-center gap-2 hover:bg-[#002b66] transition-colors shadow-lg shadow-blue-100"
+                  className="bg-[#003882] text-white p-3 md:px-6 md:py-3 rounded-2xl md:rounded-full text-[10px] font-black uppercase tracking-widest flex items-center gap-2 hover:bg-[#002b66] active:scale-95 transition-all shadow-lg shadow-blue-100"
                 >
-                  <Download size={14} /> Download
+                  <Download size={18} /> <span className="hidden md:inline">Download</span>
                 </button>
                 <button 
+                  type="button"
                   onClick={() => setViewingResource(null)} 
-                  className="p-2 hover:bg-slate-100 rounded-full transition-colors text-slate-400 hover:text-slate-900"
+                  className="p-3 hover:bg-slate-100 rounded-2xl transition-colors text-slate-400 hover:text-slate-900 active:scale-90"
                 >
-                  <X />
+                  <X size={24} strokeWidth={3} />
                 </button>
               </div>
             </div>
-            <div className="flex-1 w-full bg-slate-50 flex items-center justify-center relative">
+            <div className="flex-1 w-full bg-slate-50 relative">
               <iframe 
                 src={getViewableUrl(viewingResource.storage_path)} 
                 className="w-full h-full border-none bg-white" 
-                title="Resource View" 
+                title="Resource Preview" 
                 allow="autoplay"
               />
             </div>
@@ -245,7 +261,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
             </div>
           </div>
         ) : (
-          /* --- STRICT SINGLE COLUMN VIEW --- */
+          /* --- SELECTED LESSON VIEW --- */
           <div className="max-w-4xl mx-auto animate-in fade-in slide-in-from-bottom-6 duration-700">
             <div className="mb-20">
               <span className="bg-[#EF4E92] text-white px-5 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest shadow-md inline-block">{selectedLesson.category}</span>
@@ -320,30 +336,32 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
               </div>
               <div className="grid grid-cols-1 gap-6">
                 {selectedLesson.attachments?.map((att, i) => (
-                  <div key={i} className="bg-white rounded-[40px] p-6 md:p-8 flex items-center justify-between border border-slate-100 shadow-sm hover:shadow-xl transition-all group overflow-hidden">
+                  <div key={i} className="bg-white rounded-[40px] p-5 md:p-8 flex items-center justify-between border border-slate-100 shadow-sm hover:shadow-xl transition-all group relative overflow-visible">
                     <div className="flex items-center gap-4 md:gap-6 min-w-0 flex-1">
                       <div className="bg-slate-50 p-4 rounded-3xl text-slate-400 group-hover:bg-pink-50 group-hover:text-[#EF4E92] transition-colors shrink-0">
                         <FileText size={24} />
                       </div>
                       <div className="min-w-0 flex-1">
-                        <h4 className="font-black text-slate-800 text-sm md:text-base truncate pr-4" title={att.name}>{att.name}</h4>
-                        <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-1">Resource Item</p>
+                        <h4 className="font-black text-slate-800 text-xs md:text-base truncate pr-2" title={att.name}>{att.name}</h4>
+                        <p className="text-[9px] text-slate-400 font-bold uppercase tracking-widest mt-1">Ready to access</p>
                       </div>
                     </div>
-                    <div className="flex gap-2 shrink-0 ml-4">
+                    <div className="flex gap-3 shrink-0 ml-4 relative z-20">
                       <button 
+                        type="button"
                         onClick={() => setViewingResource(att)} 
-                        className="p-3 md:p-4 bg-slate-50 text-[#EF4E92] rounded-2xl hover:bg-pink-50 transition-all active:scale-95 border border-pink-100"
+                        className="p-4 bg-slate-50 text-[#EF4E92] rounded-2xl hover:bg-pink-50 transition-all active:scale-90 border border-pink-100 shadow-sm"
                         title="View in App"
                       >
-                        <Eye size={20} />
+                        <Eye size={22} />
                       </button>
                       <button 
+                        type="button"
                         onClick={() => handleDownload(att.storage_path, att.name)} 
-                        className="p-3 md:p-4 bg-blue-50 text-[#003882] rounded-2xl hover:bg-blue-100 transition-all active:scale-95 border border-blue-100"
+                        className="p-4 bg-blue-50 text-[#003882] rounded-2xl hover:bg-blue-100 transition-all active:scale-90 border border-blue-100 shadow-sm"
                         title="Download File"
                       >
-                        <Download size={20} />
+                        <Download size={22} />
                       </button>
                     </div>
                   </div>
