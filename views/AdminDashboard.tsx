@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../services/supabaseService.ts';
-import { categorizeLessonTitle, generateFullLesson } from '../services/geminiService.ts';
+import { categorizeLessonTitle, generateFullLesson, generateLessonSummary } from '../services/geminiService.ts';
 import { Lesson, LessonStatus, UserRole, Profile, LessonActivity, LessonVideo, Attachment, LessonContentStructure, LessonSubSection } from '../types.ts';
 
 // Helper components defined outside of the main component
@@ -181,6 +181,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
   const [attachments, setAttachments] = useState<Partial<Attachment>[]>([]);
   const [loading, setLoading] = useState(false);
   const [isCategorizing, setIsCategorizing] = useState(false);
+  const [isSummarizing, setIsSummarizing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const [isAiModalOpen, setIsAiModalOpen] = useState(false);
@@ -374,6 +375,22 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
     }
   };
 
+  const handleAutoSummarize = async () => {
+    const content = serializeStructureToMarkdown();
+    if (content.length < 50) return alert("Please add more lesson body content before summarizing.");
+    setIsSummarizing(true);
+    try {
+      const result = await generateLessonSummary(content);
+      if (result) {
+        setFormData(prev => ({ ...prev, summary: result }));
+      }
+    } catch (e) {
+      console.error("AI Summary failed", e);
+    } finally {
+      setIsSummarizing(false);
+    }
+  };
+
   const addSubSection = (box: keyof LessonContentStructure) => {
     setStructure(prev => ({
       ...prev,
@@ -448,9 +465,14 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
           </div>
           <div className="space-y-4 overflow-y-auto lg:max-h-[calc(100vh-220px)] pr-2 scrollbar-hide">
             {lessons.map(l => (
-              <div key={l.id} onClick={() => handleEdit(l.id)} className={`p-4 md:p-5 rounded-[28px] border transition-all cursor-pointer relative ${editingId === l.id ? 'border-pink-500 bg-pink-50/30' : 'border-gray-50 bg-white hover:border-gray-200 shadow-sm'}`}>
-                <h3 className="font-bold text-sm line-clamp-1 text-gray-800 mb-2">{l.title || 'Untitled'}</h3>
-                <div className="flex items-center justify-between">
+              <div key={l.id} onClick={() => handleEdit(l.id)} className={`p-4 md:p-5 rounded-[28px] border transition-all cursor-pointer relative flex flex-col ${editingId === l.id ? 'border-pink-500 bg-pink-50/30' : 'border-gray-50 bg-white hover:border-gray-200 shadow-sm'}`}>
+                <h3 className="font-bold text-sm line-clamp-1 text-gray-800 mb-1">{l.title || 'Untitled'}</h3>
+                {l.summary && (
+                  <p className="text-[10px] text-gray-500 line-clamp-2 italic mb-3 leading-relaxed">
+                    {l.summary}
+                  </p>
+                )}
+                <div className="flex items-center justify-between mt-auto">
                   <p className="text-[9px] text-gray-400 font-bold uppercase tracking-widest">{l.category}</p>
                   <span className={`text-[8px] font-black uppercase px-2 py-0.5 rounded-full ${l.status === LessonStatus.PUBLISHED ? 'bg-green-500 text-white' : 'bg-orange-500 text-white'}`}>{l.status}</span>
                 </div>
@@ -479,11 +501,11 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                 <div className="space-y-3">
-                  <SectionHeader title="Lesson Identity" />
-                  <input placeholder="Lesson Title..." className="w-full bg-white border border-gray-100 rounded-[28px] px-6 py-5 font-black text-xl text-gray-800 outline-none shadow-sm focus:border-pink-300 transition-all" value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})} />
+                  <SectionHeader title="Mission Name" />
+                  <input placeholder="Mission Name..." className="w-full bg-white border border-gray-100 rounded-[28px] px-6 py-5 font-black text-xl text-gray-800 outline-none shadow-sm focus:border-pink-300 transition-all" value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})} />
                 </div>
                 <div className="space-y-3">
-                  <SectionHeader title="Category" />
+                  <SectionHeader title="Classification" />
                   <div className="flex items-center gap-3">
                     <div className="relative flex-1">
                       <select
@@ -498,11 +520,43 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
                       onClick={handleAutoCategorize}
                       disabled={isCategorizing}
                       className="shrink-0 w-14 h-14 bg-white border border-gray-100 rounded-full flex items-center justify-center font-black text-[#EF4E92] shadow-sm hover:scale-110 active:scale-95 transition-all"
-                      title="AI Auto-Categorize"
+                      title="AI Classification"
                     >
                       {isCategorizing ? <div className="w-5 h-5 border-2 border-pink-500 border-t-transparent rounded-full animate-spin"></div> : "AI"}
                     </button>
                   </div>
+                </div>
+              </div>
+
+              {/* MISSION SUMMARY BLOCK */}
+              <div className="space-y-3">
+                <SectionHeader title="Mission Briefing (Summary)" />
+                <div className="flex flex-col md:flex-row gap-4">
+                  <div className="relative flex-1">
+                    <textarea 
+                      placeholder="Brief overview for the mission team..." 
+                      className="w-full bg-white border border-gray-100 rounded-[32px] px-8 py-6 font-medium text-sm text-gray-600 outline-none shadow-sm focus:border-pink-300 transition-all resize-none min-h-[120px] leading-relaxed italic" 
+                      value={formData.summary} 
+                      onChange={e => setFormData({...formData, summary: e.target.value})} 
+                    />
+                  </div>
+                  <button
+                    onClick={handleAutoSummarize}
+                    disabled={isSummarizing}
+                    className="shrink-0 md:w-16 h-16 md:h-auto bg-white border border-gray-100 rounded-[32px] flex flex-col items-center justify-center font-black text-[#EF4E92] shadow-sm hover:scale-105 active:scale-95 transition-all p-4 gap-2 border-dashed border-2"
+                    title="AI Mission Briefing"
+                  >
+                    {isSummarizing ? (
+                      <div className="w-5 h-5 border-2 border-pink-500 border-t-transparent rounded-full animate-spin"></div>
+                    ) : (
+                      <>
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                        </svg>
+                        <span className="text-[8px] uppercase tracking-widest hidden md:block">AI Brief</span>
+                      </>
+                    )}
+                  </button>
                 </div>
               </div>
 
