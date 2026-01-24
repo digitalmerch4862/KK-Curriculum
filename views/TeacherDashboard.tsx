@@ -1,8 +1,9 @@
+
 import React, { useState, useEffect, useMemo } from 'react';
 import { db } from '../services/supabaseService.ts';
 import { Lesson, UserRole, Profile, LessonContentStructure, LessonVideo, Attachment } from '../types.ts';
 import { 
-  X, ArrowLeft, ChevronRight, Home, Menu, Printer, FileText, Play, Eye, Search, BookOpen, GraduationCap, Users, CheckCircle2
+  X, ArrowLeft, ChevronRight, Home, Menu, Download, FileText, Play, Eye, Search, BookOpen, GraduationCap, Users, CheckCircle2
 } from 'lucide-react';
 import TTSController from '../components/TTSController.tsx';
 
@@ -87,12 +88,29 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
     return newStructure;
   };
 
-  const handlePrint = (url: string) => {
-    const printWindow = window.open(url, '_blank');
-    if (printWindow) {
-      printWindow.focus();
-      printWindow.print();
+  /**
+   * Converts a standard Google Drive share link to a /preview link for embedding in iframes.
+   */
+  const getViewableUrl = (url: string) => {
+    if (!url) return '';
+    if (url.includes('drive.google.com')) {
+      // Extract file ID from drive link
+      const idMatch = url.match(/\/d\/([^\/]+)/);
+      if (idMatch && idMatch[1]) {
+        return `https://drive.google.com/file/d/${idMatch[1]}/preview`;
+      }
     }
+    return url;
+  };
+
+  const handleDownload = (url: string, filename: string) => {
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    link.target = '_blank';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
 
   const filteredLessons = lessons.filter(l => 
@@ -124,23 +142,38 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
         />
       )}
 
-      {/* --- RESOURCE PREVIEW --- */}
+      {/* --- RESOURCE PREVIEW (OPEN INSIDE APP) --- */}
       {viewingResource && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/95 backdrop-blur-md p-0 md:p-4">
-          <div className="bg-white w-full max-w-6xl h-full md:h-[90vh] md:rounded-[40px] overflow-hidden flex flex-col shadow-2xl">
-            <div className="p-4 md:p-6 border-b flex items-center justify-between bg-white sticky top-0">
+          <div className="bg-white w-full max-w-6xl h-full md:h-[90vh] md:rounded-[40px] overflow-hidden flex flex-col shadow-2xl animate-in zoom-in-95 duration-300">
+            <div className="p-4 md:p-6 border-b flex items-center justify-between bg-white sticky top-0 z-10">
               <div className="flex items-center gap-3 min-w-0">
-                <FileText className="text-pink-500 shrink-0" />
-                <h3 className="font-black text-sm md:text-xl truncate">{viewingResource.name}</h3>
+                <FileText className="text-[#EF4E92] shrink-0" />
+                <h3 className="font-black text-sm md:text-xl truncate text-[#003882]">{viewingResource.name}</h3>
               </div>
               <div className="flex items-center gap-2 shrink-0">
-                <button onClick={() => handlePrint(viewingResource.storage_path)} className="bg-[#003882] text-white px-4 py-2 rounded-full text-[10px] font-black uppercase tracking-widest flex items-center gap-2">
-                  <Printer size={14} /> Print
+                <button 
+                  onClick={() => handleDownload(viewingResource.storage_path, viewingResource.name)} 
+                  className="bg-[#003882] text-white px-4 py-2 rounded-full text-[10px] font-black uppercase tracking-widest flex items-center gap-2 hover:bg-[#002b66] transition-colors shadow-lg shadow-blue-100"
+                >
+                  <Download size={14} /> Download
                 </button>
-                <button onClick={() => setViewingResource(null)} className="p-2 hover:bg-slate-100 rounded-full transition-colors"><X /></button>
+                <button 
+                  onClick={() => setViewingResource(null)} 
+                  className="p-2 hover:bg-slate-100 rounded-full transition-colors text-slate-400 hover:text-slate-900"
+                >
+                  <X />
+                </button>
               </div>
             </div>
-            <iframe src={viewingResource.storage_path} className="flex-1 w-full border-none bg-slate-50" title="Resource View" />
+            <div className="flex-1 w-full bg-slate-50 flex items-center justify-center relative">
+              <iframe 
+                src={getViewableUrl(viewingResource.storage_path)} 
+                className="w-full h-full border-none bg-white" 
+                title="Resource View" 
+                allow="autoplay"
+              />
+            </div>
           </div>
         </div>
       )}
@@ -294,12 +327,24 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
                       </div>
                       <div className="min-w-0 flex-1">
                         <h4 className="font-black text-slate-800 text-sm md:text-base truncate pr-4" title={att.name}>{att.name}</h4>
-                        <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-1">Printable Activity</p>
+                        <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-1">Resource Item</p>
                       </div>
                     </div>
                     <div className="flex gap-2 shrink-0 ml-4">
-                      <button onClick={() => setViewingResource(att)} className="p-3 md:p-4 bg-slate-50 text-slate-600 rounded-2xl hover:bg-slate-100 transition-colors"><Eye size={20} /></button>
-                      <button onClick={() => handlePrint(att.storage_path)} className="p-3 md:p-4 bg-blue-50 text-blue-600 rounded-2xl hover:bg-blue-100 transition-colors"><Printer size={20} /></button>
+                      <button 
+                        onClick={() => setViewingResource(att)} 
+                        className="p-3 md:p-4 bg-slate-50 text-[#EF4E92] rounded-2xl hover:bg-pink-50 transition-all active:scale-95 border border-pink-100"
+                        title="View in App"
+                      >
+                        <Eye size={20} />
+                      </button>
+                      <button 
+                        onClick={() => handleDownload(att.storage_path, att.name)} 
+                        className="p-3 md:p-4 bg-blue-50 text-[#003882] rounded-2xl hover:bg-blue-100 transition-all active:scale-95 border border-blue-100"
+                        title="Download File"
+                      >
+                        <Download size={20} />
+                      </button>
                     </div>
                   </div>
                 ))}

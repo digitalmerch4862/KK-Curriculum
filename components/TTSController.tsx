@@ -117,10 +117,35 @@ const TTSController: React.FC<TTSControllerProps> = ({
       return;
     }
 
-    const sanitizedText = item.text.trim();
-    if (!sanitizedText || sanitizedText.length < 2) {
+    // ROBUST TEXT VALIDATION for TTS API
+    let sanitizedText = item.text.trim();
+    
+    // Skip empty or too short text
+    if (!sanitizedText || sanitizedText.length < 10) {
+      console.log(`Skipping short text: "${sanitizedText}"`);
       playSegment(index + 1);
       return;
+    }
+    
+    // Remove problematic characters that TTS might reject
+    sanitizedText = sanitizedText
+      .replace(/[\u2018\u2019]/g, "'") // Replace smart quotes
+      .replace(/[\u201C\u201D]/g, '"') // Replace smart double quotes
+      .replace(/[\u2013\u2014]/g, '-') // Replace em/en dashes
+      .replace(/[^\w\s.,!?;:'\-()&]/g, ' ') // Keep only safe characters
+      .replace(/\s+/g, ' ') // Normalize whitespace
+      .trim();
+    
+    // Double-check after cleaning
+    if (!sanitizedText || sanitizedText.length < 10) {
+      console.log(`Text too short after sanitization: "${sanitizedText}"`);
+      playSegment(index + 1);
+      return;
+    }
+    
+    // Ensure text ends with punctuation for natural speech
+    if (!/[.!?]$/.test(sanitizedText)) {
+      sanitizedText += '.';
     }
 
     setIsLoading(true);
@@ -161,9 +186,12 @@ const TTSController: React.FC<TTSControllerProps> = ({
       source.start();
     } catch (error) {
       console.error("Narrator Error:", error);
+      console.warn(`Skipping problematic text: "${item.text.substring(0, 50)}..."`);
       setIsLoading(false);
-      // Attempt to continue to next part after a delay
-      if (isPlayingRef.current) setTimeout(() => playSegment(index + 1), 1000);
+      // Continue to next segment even on error
+      if (isPlayingRef.current) {
+        setTimeout(() => playSegment(index + 1), 500);
+      }
     }
   }, [playlist, stop, onActiveIdChange, initAudioContext]);
 
