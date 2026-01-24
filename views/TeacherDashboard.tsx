@@ -1,9 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { db } from '../services/supabaseService.ts';
 import { Lesson, UserRole, Profile, LessonContentStructure, LessonVideo, Attachment } from '../types.ts';
 import { 
   X, ArrowLeft, ChevronRight, Home, Menu, Printer, FileText, Play, Eye, Search, BookOpen, GraduationCap, Users, CheckCircle2
 } from 'lucide-react';
+import TTSController from '../components/TTSController.tsx';
 
 interface TeacherDashboardProps {
   user: Profile;
@@ -20,6 +21,10 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
   const [isNavExpanded, setIsNavExpanded] = useState(false);
   const [activeVideo, setActiveVideo] = useState<LessonVideo | null>(null);
   const [viewingResource, setViewingResource] = useState<Attachment | null>(null);
+
+  // Videoke Mode State
+  const [activeReadingId, setActiveReadingId] = useState<string | null>(null);
+  const [isTTSPlaying, setIsTTSPlaying] = useState(false);
 
   useEffect(() => {
     fetchLessons();
@@ -65,9 +70,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
     const newStructure: LessonContentStructure = { read: [], teach: [], engage: [] };
     if (!md) return newStructure;
     
-    // Split into 1. Read, 2. Teach, 3. Engage
     const mainSections = md.split(/^# \d\. /m);
-    
     const pillars = ['read', 'teach', 'engage'] as const;
     pillars.forEach((key, i) => {
       const fullBlock = mainSections[i + 1] || '';
@@ -100,9 +103,28 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
   const categories = ['All', ...Array.from(new Set(lessons.map(l => l.category)))];
   const lessonStructure = selectedLesson ? parseMarkdownToStructure(selectedLesson.content || '') : null;
 
+  // Adapt structure for TTSController
+  const ttsSections = useMemo(() => {
+    if (!lessonStructure) return [];
+    return [
+      { id: 'read-sec', title: 'READ', subsections: lessonStructure.read },
+      { id: 'teach-sec', title: 'TEACH', subsections: lessonStructure.teach },
+      { id: 'engage-sec', title: 'ENGAGE', subsections: lessonStructure.engage }
+    ];
+  }, [lessonStructure]);
+
   return (
     <div className="min-h-screen bg-[#F4F7FA] text-slate-900 pb-20 font-sans selection:bg-pink-100">
       
+      {/* --- VIDEOKE CONTROL FAB --- */}
+      {selectedLesson && (
+        <TTSController 
+          sections={ttsSections}
+          onActiveIdChange={setActiveReadingId}
+          onPlayingStatusChange={setIsTTSPlaying}
+        />
+      )}
+
       {/* --- RESOURCE PREVIEW MODAL --- */}
       {viewingResource && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/95 backdrop-blur-md p-0 md:p-4">
@@ -113,10 +135,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
                 <h3 className="font-black text-sm md:text-xl truncate max-w-[150px] md:max-w-md">{viewingResource.name}</h3>
               </div>
               <div className="flex items-center gap-2">
-                <button 
-                  onClick={() => handlePrint(viewingResource.storage_path)} 
-                  className="bg-[#003882] text-white px-4 py-2 rounded-full text-[10px] font-black uppercase tracking-widest flex items-center gap-2"
-                >
+                <button onClick={() => handlePrint(viewingResource.storage_path)} className="bg-[#003882] text-white px-4 py-2 rounded-full text-[10px] font-black uppercase tracking-widest flex items-center gap-2">
                   <Printer size={14} /> Print
                 </button>
                 <button onClick={() => setViewingResource(null)} className="p-2 hover:bg-slate-100 rounded-full transition-colors"><X /></button>
@@ -127,7 +146,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
         </div>
       )}
 
-      {/* --- FLOATING LESSON NAV --- */}
+      {/* --- FLOATING NAVIGATION MAP --- */}
       {selectedLesson && lessonStructure && (
         <div className="fixed bottom-6 right-6 z-[70] flex flex-col items-end gap-3">
           <div className={`flex flex-col gap-2 mb-2 transition-all duration-300 origin-bottom-right max-h-[60vh] overflow-y-auto pr-1 scrollbar-hide ${isNavExpanded ? 'scale-100 opacity-100' : 'scale-0 opacity-0 pointer-events-none'}`}>
@@ -145,10 +164,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
               <button key={item.id} onClick={() => scrollToSection(item.id)} className="bg-[#EF4E92] text-white px-5 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-lg text-right hover:bg-pink-600 transition-all">{item.title}</button>
             ))}
           </div>
-          <button 
-            onClick={() => setIsNavExpanded(!isNavExpanded)}
-            className={`px-8 py-4 rounded-full flex items-center gap-3 shadow-2xl transition-all duration-500 font-black text-xs uppercase tracking-[0.2em] ${isNavExpanded ? 'bg-slate-900 text-white' : 'bg-[#EF4E92] text-white'}`}
-          >
+          <button onClick={() => setIsNavExpanded(!isNavExpanded)} className={`px-8 py-4 rounded-full flex items-center gap-3 shadow-2xl transition-all duration-500 font-black text-xs uppercase tracking-[0.2em] ${isNavExpanded ? 'bg-slate-900 text-white' : 'bg-[#EF4E92] text-white'}`}>
             {isNavExpanded ? <X size={18} strokeWidth={3} /> : <Menu size={18} strokeWidth={3} />}
             <span>{isNavExpanded ? 'Close Map' : 'Lesson Map'}</span>
           </button>
@@ -166,13 +182,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
           {!selectedLesson && (
             <div className="flex-1 max-w-md hidden md:block relative">
               <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-              <input 
-                type="text" 
-                placeholder="Find a lesson..." 
-                className="w-full bg-slate-100 rounded-full pl-12 pr-6 py-2.5 text-sm focus:ring-2 focus:ring-pink-500 outline-none transition-all" 
-                value={searchTerm} 
-                onChange={(e) => setSearchTerm(e.target.value)} 
-              />
+              <input type="text" placeholder="Find a mission..." className="w-full bg-slate-100 rounded-full pl-12 pr-6 py-2.5 text-sm focus:ring-2 focus:ring-pink-500 outline-none transition-all" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
             </div>
           )}
 
@@ -184,48 +194,29 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
 
       <main className="max-w-7xl mx-auto px-6 mt-10">
         {!selectedLesson ? (
-          /* --- BROWSE VIEW --- */
+          /* --- LIST VIEW --- */
           <div className="space-y-10">
             <div className="flex gap-2 overflow-x-auto pb-4 scrollbar-hide -mx-6 px-6">
               {categories.map(cat => (
-                <button 
-                  key={cat} 
-                  onClick={() => setCategoryFilter(cat)} 
-                  className={`px-6 py-2.5 rounded-full text-[10px] font-black uppercase whitespace-nowrap transition-all shadow-sm ${categoryFilter === cat ? 'bg-[#EF4E92] text-white shadow-pink-100' : 'bg-white text-slate-400 border border-slate-100'}`}
-                >
-                  {cat}
-                </button>
+                <button key={cat} onClick={() => setCategoryFilter(cat)} className={`px-6 py-2.5 rounded-full text-[10px] font-black uppercase whitespace-nowrap transition-all shadow-sm ${categoryFilter === cat ? 'bg-[#EF4E92] text-white' : 'bg-white text-slate-400 border border-slate-100'}`}>{cat}</button>
               ))}
             </div>
-
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-              {loading ? (
-                Array(6).fill(0).map((_, i) => <div key={i} className="bg-white/50 h-64 rounded-[40px] animate-pulse"></div>)
-              ) : filteredLessons.length > 0 ? (
-                filteredLessons.map(lesson => (
-                  <div 
-                    key={lesson.id} 
-                    onClick={() => handleViewLesson(lesson.id)} 
-                    className="group bg-white rounded-[40px] p-8 shadow-sm hover:shadow-2xl hover:scale-[1.02] transition-all cursor-pointer border-b-[8px] border-b-slate-100 hover:border-b-[#EF4E92] flex flex-col h-full"
-                  >
-                    <span className="text-[9px] font-black text-[#EF4E92] uppercase mb-4 block tracking-widest">{lesson.category}</span>
-                    <h2 className="text-2xl font-black text-[#003882] mb-3 group-hover:text-[#EF4E92] leading-tight">{lesson.title}</h2>
-                    <p className="text-slate-500 text-sm line-clamp-3 leading-relaxed mb-8 flex-1">{lesson.summary}</p>
-                    <div className="flex items-center justify-between pt-6 border-t border-slate-50">
-                      <span className="text-[9px] font-black text-slate-300 uppercase tracking-widest">Grades {lesson.grade_min}-{lesson.grade_max}</span>
-                      <ChevronRight className="text-slate-200 group-hover:text-[#EF4E92] group-hover:translate-x-1 transition-all" size={20} />
-                    </div>
+              {loading ? Array(6).fill(0).map((_, i) => <div key={i} className="bg-white/50 h-64 rounded-[40px] animate-pulse"></div>) : filteredLessons.map(lesson => (
+                <div key={lesson.id} onClick={() => handleViewLesson(lesson.id)} className="group bg-white rounded-[40px] p-8 shadow-sm hover:shadow-2xl hover:scale-[1.02] transition-all cursor-pointer border-b-[8px] border-b-slate-100 hover:border-b-[#EF4E92] flex flex-col h-full">
+                  <span className="text-[9px] font-black text-[#EF4E92] uppercase mb-4 block tracking-widest">{lesson.category}</span>
+                  <h2 className="text-2xl font-black text-[#003882] mb-3 group-hover:text-[#EF4E92] leading-tight">{lesson.title}</h2>
+                  <p className="text-slate-500 text-sm line-clamp-3 leading-relaxed mb-8 flex-1">{lesson.summary}</p>
+                  <div className="flex items-center justify-between pt-6 border-t border-slate-50">
+                    <span className="text-[9px] font-black text-slate-300 uppercase tracking-widest">Grades {lesson.grade_min}-{lesson.grade_max}</span>
+                    <ChevronRight className="text-slate-200 group-hover:text-[#EF4E92] group-hover:translate-x-1 transition-all" size={20} />
                   </div>
-                ))
-              ) : (
-                <div className="col-span-full py-20 text-center">
-                  <p className="text-slate-300 font-black uppercase tracking-widest text-sm">No missions found matching your search</p>
                 </div>
-              )}
+              ))}
             </div>
           </div>
         ) : (
-          /* --- DETAILED LESSON VIEW --- */
+          /* --- STRICT SINGLE COLUMN LESSON VIEW --- */
           <div className="max-w-4xl mx-auto animate-in fade-in slide-in-from-bottom-6 duration-700">
             <div className="mb-20">
               <span className="bg-[#EF4E92] text-white px-5 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest shadow-md inline-block">{selectedLesson.category}</span>
@@ -233,7 +224,6 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
               <p className="text-xl md:text-2xl text-slate-400 font-medium italic leading-relaxed">"{selectedLesson.summary}"</p>
             </div>
 
-            {/* Pillar Sections */}
             <div className="space-y-32">
               {[
                 { id: 'read-anchor', key: 'read', color: '#2563eb', label: '1. READ', icon: <BookOpen size={24} /> },
@@ -245,22 +235,23 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
                     <div className="p-3 rounded-2xl text-white shadow-lg" style={{ backgroundColor: pillar.color }}>{pillar.icon}</div>
                     <h3 className="text-3xl md:text-4xl font-black tracking-tighter uppercase text-[#003882]">{pillar.label}</h3>
                   </div>
-
                   <div className="flex flex-col gap-10">
                     {lessonStructure && lessonStructure[pillar.key].map((section) => (
                       <div 
                         key={section.id} 
                         id={section.id}
-                        className="bg-white rounded-[40px] p-8 md:p-12 shadow-sm border-l-[12px] scroll-mt-28 group hover:shadow-xl transition-all" 
-                        style={{ borderLeftColor: pillar.color }}
+                        className={`bg-white rounded-[40px] p-8 md:p-12 shadow-sm border-t-[12px] scroll-mt-28 transition-all duration-500 ${
+                          activeReadingId === section.id 
+                          ? 'scale-[1.02] ring-8 ring-pink-50 shadow-2xl border-t-[#EF4E92]' 
+                          : 'hover:shadow-xl'
+                        }`} 
+                        style={{ borderTopColor: activeReadingId === section.id ? '#EF4E92' : pillar.color }}
                       >
                         <div className="flex items-center justify-between mb-8">
-                          <h4 className="text-[10px] font-black text-slate-300 uppercase tracking-widest group-hover:text-slate-400 transition-colors">{section.title}</h4>
-                          <CheckCircle2 className="text-slate-50 group-hover:text-slate-100" size={20} />
+                          <h4 className="text-[10px] font-black text-slate-300 uppercase tracking-widest">{section.title}</h4>
+                          <CheckCircle2 className={`transition-all ${activeReadingId === section.id ? 'text-[#EF4E92] scale-125' : 'text-slate-50'}`} size={20} />
                         </div>
-                        <p className="text-slate-700 text-lg md:text-2xl leading-relaxed font-medium whitespace-pre-wrap">
-                          {section.content}
-                        </p>
+                        <p className="text-slate-700 text-lg md:text-2xl leading-relaxed font-medium whitespace-pre-wrap">{section.content}</p>
                       </div>
                     ))}
                   </div>
@@ -275,75 +266,47 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
                 <h3 className="text-3xl font-black text-[#003882] uppercase tracking-tighter">Media Hub</h3>
               </div>
               <div className="flex flex-col gap-10">
-                {selectedLesson.videos && selectedLesson.videos.length > 0 ? selectedLesson.videos.map((vid, i) => (
+                {selectedLesson.videos?.map((vid, i) => (
                   <div key={i} className="bg-slate-900 rounded-[48px] overflow-hidden aspect-video shadow-2xl relative border-4 border-white">
                     {activeVideo?.url === vid.url ? (
-                      <iframe 
-                        src={`https://www.youtube.com/embed/${vid.url.includes('v=') ? vid.url.split('v=')[1].split('&')[0] : vid.url.split('/').pop()}`} 
-                        className="w-full h-full" 
-                        allowFullScreen 
-                        allow="autoplay" 
-                        title={vid.title || 'Lesson Video'} 
-                      />
+                      <iframe src={`https://www.youtube.com/embed/${vid.url.includes('v=') ? vid.url.split('v=')[1].split('&')[0] : vid.url.split('/').pop()}`} className="w-full h-full" allowFullScreen allow="autoplay" title={vid.title || 'Lesson Video'} />
                     ) : (
                       <div className="w-full h-full flex flex-col items-center justify-center p-8 bg-slate-800 relative group">
-                        <div className="absolute inset-0 bg-slate-900 opacity-20 group-hover:opacity-10 transition-opacity"></div>
-                        <button 
-                          onClick={() => setActiveVideo(vid)} 
-                          className="w-24 h-24 bg-white text-slate-900 rounded-full flex items-center justify-center hover:scale-110 active:scale-95 transition-all shadow-2xl relative z-10"
-                        >
+                        <button onClick={() => setActiveVideo(vid)} className="w-24 h-24 bg-white text-slate-900 rounded-full flex items-center justify-center hover:scale-110 active:scale-95 transition-all shadow-2xl relative z-10">
                           <Play fill="currentColor" size={32} />
                         </button>
                         <span className="text-white/60 font-black mt-8 uppercase text-[11px] tracking-widest relative z-10">{vid.title || 'Start Video'}</span>
                       </div>
                     )}
                   </div>
-                )) : (
-                  <div className="bg-slate-50 rounded-[40px] p-20 text-center border-2 border-dashed border-slate-200">
-                    <p className="text-slate-300 font-black uppercase tracking-widest text-sm">No videos for this lesson</p>
-                  </div>
-                )}
+                ))}
               </div>
             </section>
 
-            {/* Downloads HUB */}
+            {/* Resources HUB */}
             <section id="assets-section" className="mt-40 scroll-mt-24 pb-40">
               <div className="flex items-center gap-3 mb-12">
                 <div className="h-10 w-2 bg-[#003882] rounded-full"></div>
                 <h3 className="text-3xl font-black text-[#003882] uppercase tracking-tighter">Resources</h3>
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                {selectedLesson.attachments && selectedLesson.attachments.length > 0 ? selectedLesson.attachments.map((att, i) => (
+              <div className="grid grid-cols-1 gap-6">
+                {selectedLesson.attachments?.map((att, i) => (
                   <div key={i} className="bg-white rounded-[40px] p-8 flex items-center justify-between border border-slate-100 shadow-sm hover:shadow-xl transition-all group">
-                    <div className="flex items-center gap-6 min-w-0">
-                      <div className="bg-slate-50 p-4 rounded-3xl text-slate-400 group-hover:bg-pink-50 group-hover:text-[#EF4E92] transition-colors shrink-0"><FileText size={28} /></div>
-                      <div className="min-w-0">
-                        <h4 className="font-black text-slate-800 text-base truncate" title={att.name}>{att.name}</h4>
+                    <div className="flex items-center gap-6 min-w-0 flex-1">
+                      <div className="bg-slate-50 p-4 rounded-3xl text-slate-400 group-hover:bg-pink-50 group-hover:text-[#EF4E92] transition-colors shrink-0">
+                        <FileText size={28} />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <h4 className="font-black text-slate-800 text-base truncate pr-4" title={att.name}>{att.name}</h4>
                         <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-1">Printable Resource</p>
                       </div>
                     </div>
-                    <div className="flex gap-2 shrink-0 ml-4">
-                      <button 
-                        onClick={() => setViewingResource(att)} 
-                        className="p-4 bg-slate-50 text-slate-600 rounded-2xl hover:bg-slate-100 transition-colors"
-                        title="View Preview"
-                      >
-                        <Eye size={20} />
-                      </button>
-                      <button 
-                        onClick={() => handlePrint(att.storage_path)} 
-                        className="p-4 bg-blue-50 text-blue-600 rounded-2xl hover:bg-blue-100 transition-colors"
-                        title="Print"
-                      >
-                        <Printer size={20} />
-                      </button>
+                    <div className="flex gap-2 shrink-0">
+                      <button onClick={() => setViewingResource(att)} className="p-4 bg-slate-50 text-slate-600 rounded-2xl hover:bg-slate-100 transition-colors"><Eye size={20} /></button>
+                      <button onClick={() => handlePrint(att.storage_path)} className="p-4 bg-blue-50 text-blue-600 rounded-2xl hover:bg-blue-100 transition-colors"><Printer size={20} /></button>
                     </div>
                   </div>
-                )) : (
-                  <div className="col-span-full bg-slate-50 rounded-[40px] p-20 text-center border-2 border-dashed border-slate-200">
-                    <p className="text-slate-300 font-black uppercase tracking-widest text-sm">No documents available</p>
-                  </div>
-                )}
+                ))}
               </div>
             </section>
           </div>

@@ -1,12 +1,13 @@
 
-import { GoogleGenAI, Type } from "@google/genai";
+import { GoogleGenAI, Type, Modality } from "@google/genai";
 
 /**
- * Service for generating Sunday School lesson content using Gemini.
+ * Service for generating Sunday School lesson content and audio using Gemini.
  */
 
+const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+
 export const generateLessonSummary = async (content: string) => {
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   const response = await ai.models.generateContent({
     model: 'gemini-3-flash-preview',
     contents: `Summarize the following lesson content into 2-3 engaging sentences for teachers. Content: ${content}`,
@@ -15,7 +16,6 @@ export const generateLessonSummary = async (content: string) => {
 };
 
 export const categorizeLessonTitle = async (title: string) => {
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   const categories = [
     "PENTATEUCH",
     "HISTORY",
@@ -38,7 +38,6 @@ export const categorizeLessonTitle = async (title: string) => {
 };
 
 export const generateFullLesson = async (goal: string, existingContext: string) => {
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   const prompt = `
     Architect a complete Sunday School lesson plan based on this user's summary goal or lesson objective:
     "${goal}"
@@ -87,7 +86,6 @@ export const generateFullLesson = async (goal: string, existingContext: string) 
 };
 
 export const generateDiscussionQuestions = async (content: string, gradeRange: string) => {
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   const response = await ai.models.generateContent({
     model: 'gemini-3-flash-preview',
     contents: `Generate 5 age-appropriate discussion questions for children in grades ${gradeRange} based on this lesson content: ${content}`,
@@ -96,7 +94,6 @@ export const generateDiscussionQuestions = async (content: string, gradeRange: s
 };
 
 export const generateActivitiesDraft = async (content: string, gradeRange: string) => {
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   const response = await ai.models.generateContent({
     model: 'gemini-3-pro-preview',
     contents: `Create 2 creative hands-on activities based on this lesson for children in grades ${gradeRange}. Return as a JSON list.`,
@@ -124,4 +121,25 @@ export const generateActivitiesDraft = async (content: string, gradeRange: strin
       console.error("Failed to parse Gemini response as JSON", e);
       return [];
   }
+};
+
+/**
+ * Generates audio bytes from text using the Gemini TTS model.
+ */
+export const generateTTS = async (text: string, voiceName: string = 'Kore') => {
+  const response = await ai.models.generateContent({
+    model: "gemini-2.5-flash-preview-tts",
+    contents: [{ parts: [{ text: text }] }],
+    config: {
+      responseModalities: [Modality.AUDIO],
+      speechConfig: {
+        voiceConfig: {
+          prebuiltVoiceConfig: { voiceName: voiceName },
+        },
+      },
+    },
+  });
+
+  const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+  return base64Audio;
 };
