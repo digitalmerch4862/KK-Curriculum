@@ -44,11 +44,6 @@ export const parseContent = (content: string): Section[] => {
     parsed.push({ id: sectionId, title, subsections });
   });
 
-  console.log('📄 Parsed sections:', parsed.map(s => ({
-    id: s.id,
-    subsections: s.subsections.map(sub => ({ id: sub.id, title: sub.title }))
-  })));
-
   return parsed;
 };
 
@@ -78,48 +73,36 @@ const LessonTextTab: React.FC<LessonTextTabProps> = ({
   const [isManualScroll, setIsManualScroll] = useState(false);
   const scrollTimeoutRef = useRef<number | null>(null);
 
-  // ✅ CRITICAL: Log activeReadingId changes for debugging
-  useEffect(() => {
-    console.log('🎯 Active Reading ID changed to:', activeReadingId);
-  }, [activeReadingId]);
-
-  // ✅ FIX: Only allow IntersectionObserver when NOT playing OR user is manually scrolling
+  // ✅ FIX 4: MANAGE INTERSECTION OBSERVER PRIORITY
   useEffect(() => {
     const observer = new IntersectionObserver(
       (entries) => {
-        // CRITICAL: Disable observer during auto-playback, only enable for manual scroll
-        if (!isPlaying) {
+        // Only update activeId if NOT currently playing OR if we're manually scrolling
+        if (!isPlaying || isManualScroll) {
           entries.forEach((entry) => {
             if (entry.isIntersecting && entry.intersectionRatio > 0.5) {
-              console.log('👁️ IntersectionObserver detected:', entry.target.id);
               onActiveIdChange?.(entry.target.id);
             }
           });
         }
       },
-      { 
-        threshold: 0.5,
-        rootMargin: '-20% 0px -20% 0px' // Only trigger when centered
-      }
+      { threshold: 0.5 }
     );
 
     const cards = document.querySelectorAll('[data-segment-card]');
-    console.log(`👀 Observing ${cards.length} cards`);
     cards.forEach((card) => observer.observe(card));
 
     return () => observer.disconnect();
-  }, [isPlaying, onActiveIdChange]);
+  }, [isPlaying, isManualScroll, onActiveIdChange]);
 
-  // ✅ DETECT MANUAL SCROLL (shorter timeout for better responsiveness)
+  // ✅ DETECT MANUAL SCROLL
   useEffect(() => {
     const handleScroll = () => {
-      if (isPlaying) {
-        setIsManualScroll(true);
-        if (scrollTimeoutRef.current) window.clearTimeout(scrollTimeoutRef.current);
-        scrollTimeoutRef.current = window.setTimeout(() => {
-          setIsManualScroll(false);
-        }, 800);
-      }
+      setIsManualScroll(true);
+      if (scrollTimeoutRef.current) window.clearTimeout(scrollTimeoutRef.current);
+      scrollTimeoutRef.current = window.setTimeout(() => {
+        setIsManualScroll(false);
+      }, 1500);
     };
 
     window.addEventListener('scroll', handleScroll, { passive: true });
@@ -127,7 +110,7 @@ const LessonTextTab: React.FC<LessonTextTabProps> = ({
       window.removeEventListener('scroll', handleScroll);
       if (scrollTimeoutRef.current) window.clearTimeout(scrollTimeoutRef.current);
     };
-  }, [isPlaying]);
+  }, []);
 
   const renderFormattedContent = (text: string) => {
     return text.split('\n\n').map((paragraph, pIdx) => (
@@ -149,32 +132,24 @@ const LessonTextTab: React.FC<LessonTextTabProps> = ({
           <div className="space-y-6">
             {section.subsections.map((sub) => {
               const isActive = activeReadingId === sub.id;
-              
-              // ✅ DEBUG: Log when card should be highlighted
-              if (isActive) {
-                console.log('💖 Card is ACTIVE:', sub.id, sub.title);
-              }
-              
               return (
                 <section 
                   key={sub.id} 
                   id={sub.id} 
-                  data-segment-card
-                  className={`bg-white rounded-[40px] p-8 md:p-10 shadow-sm transition-all group scroll-mt-32 duration-500 ${
+                  data-segment-card // ✅ FIX 5: CRITICAL FOR OBSERVER
+                  className={`bg-white rounded-[40px] p-8 md:p-10 shadow-sm border-4 transition-all group scroll-mt-32 duration-500 ${
                     isActive 
-                      ? 'border-[#EF4E92] border-[6px] ring-8 ring-pink-100 shadow-2xl scale-[1.02]' 
-                      : 'border-gray-100 border-2 hover:border-gray-200 hover:shadow-md'
+                    ? 'border-[#EF4E92] border-4 ring-8 ring-pink-50 shadow-2xl scale-[1.01]' 
+                    : 'border-gray-50 hover:shadow-md'
                   }`}
                 >
                   <div className="flex items-center gap-4 mb-8">
-                    <div className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all duration-300 ${
-                      isActive 
-                        ? 'bg-[#EF4E92] text-white scale-110 rotate-3' 
-                        : 'bg-pink-50 text-[#EF4E92] group-hover:bg-pink-100'
+                    <div className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all ${
+                      isActive ? 'bg-[#EF4E92] text-white scale-110 rotate-3' : 'bg-pink-50 text-[#EF4E92] group-hover:bg-[#EF4E92] group-hover:text-white'
                     }`}>
                       {getIcon(sub.title)}
                     </div>
-                    <h3 className={`text-2xl font-black tracking-tight transition-colors duration-300 ${
+                    <h3 className={`text-2xl font-black tracking-tight transition-colors ${
                       isActive ? 'text-[#EF4E92]' : 'text-gray-900'
                     }`}>
                       {sub.title}

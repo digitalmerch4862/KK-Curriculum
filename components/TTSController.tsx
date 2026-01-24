@@ -25,21 +25,14 @@ const TTSController: React.FC<TTSControllerProps> = ({
   const isPlayingRef = useRef(false);
   const heartbeatRef = useRef<number | null>(null);
 
-  // ✅ CRITICAL FIX: Combine title and content into ONE playlist item
   const playlist = useMemo(() => {
     const list: ReadingItem[] = [];
     sections.forEach((section) => {
       section.subsections.forEach((sub) => {
-        // Combine title and content with natural pause
-        const fullText = `${sub.title}. ${sub.content}`;
-        list.push({ 
-          id: sub.id, 
-          label: sub.title, 
-          text: fullText 
-        });
+        list.push({ id: sub.id, label: sub.title, text: sub.title });
+        list.push({ id: sub.id, label: sub.title, text: sub.content });
       });
     });
-    console.log('📋 Generated Playlist:', list.map(i => ({ id: i.id, label: i.label })));
     return list;
   }, [sections]);
 
@@ -52,7 +45,6 @@ const TTSController: React.FC<TTSControllerProps> = ({
   };
 
   const stop = useCallback(() => {
-    console.log('⏹️ Stopping playback');
     synth.cancel();
     isPlayingRef.current = false;
     setIsPlaying(false);
@@ -75,16 +67,9 @@ const TTSController: React.FC<TTSControllerProps> = ({
     const cleanText = sanitize(item.text);
 
     if (!cleanText) {
-      console.warn(`⚠️ Empty text for segment ${index}, skipping...`);
       playSegment(index + 1);
       return;
     }
-
-    console.log(`▶️ Playing segment ${index}/${playlist.length - 1}:`, { 
-      id: item.id, 
-      label: item.label,
-      textPreview: cleanText.substring(0, 50) + '...'
-    });
 
     const utterance = new SpeechSynthesisUtterance(cleanText);
     const voices = synth.getVoices();
@@ -93,46 +78,33 @@ const TTSController: React.FC<TTSControllerProps> = ({
                   voices[0];
     
     if (voice) utterance.voice = voice;
-    utterance.rate = 0.9;
+    utterance.rate = 0.95;
     utterance.pitch = 1.0;
 
-    // ✅ CRITICAL: Update highlight and scroll IMMEDIATELY when speech starts
+    // ✅ FIX 1 & 3: SYNC ONSTART
     utterance.onstart = () => {
-      console.log(`✅ Speech started for: ${item.id}`);
-      
-      // Update state FIRST
       setCurrentIndex(index);
       onActiveIdChange?.(item.id);
 
-      // Then scroll with better timing
-      requestAnimationFrame(() => {
-        const element = document.getElementById(item.id);
-        
-        if (element) {
-          console.log(`📍 Scrolling to element: ${item.id} - FOUND`);
-          element.scrollIntoView({ 
-            behavior: 'smooth', 
-            block: 'center',
-            inline: 'nearest'
-          });
-        } else {
-          console.error(`❌ Element NOT FOUND: ${item.id}`);
-        }
-      });
+      // ✅ FIX 2: AUTO-SCROLL OFFSET (CENTER)
+      const element = document.getElementById(item.id);
+      if (element) {
+        element.scrollIntoView({ 
+          behavior: 'smooth', 
+          block: 'center',
+          inline: 'nearest'
+        });
+      }
     };
 
     utterance.onend = () => {
-      console.log(`✓ Finished segment ${index}`);
       if (isPlayingRef.current) {
-        setTimeout(() => playSegment(index + 1), 300);
+        setTimeout(() => playSegment(index + 1), 400);
       }
     };
 
     utterance.onerror = (e) => {
-      console.error(`❌ TTS Error on segment ${index}:`, e.error);
-      if (e.error !== 'interrupted') {
-        stop();
-      }
+      if (e.error !== 'interrupted') stop();
     };
 
     synth.speak(utterance);
@@ -142,13 +114,11 @@ const TTSController: React.FC<TTSControllerProps> = ({
     if (isPlaying) {
       stop();
     } else {
-      console.log('🎬 Starting playback...');
       isPlayingRef.current = true;
       setIsPlaying(true);
       onPlayingStatusChange?.(true);
       synth.cancel();
 
-      // Heartbeat to prevent browser from pausing long speeches
       heartbeatRef.current = window.setInterval(() => {
         if (synth.speaking && !synth.paused) {
           synth.pause();
@@ -161,10 +131,7 @@ const TTSController: React.FC<TTSControllerProps> = ({
   };
 
   useEffect(() => {
-    return () => {
-      console.log('🧹 Cleaning up TTS controller');
-      stop();
-    };
+    return () => stop();
   }, [stop]);
 
   const currentItem = playlist[currentIndex];
