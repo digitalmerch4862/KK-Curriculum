@@ -1,4 +1,3 @@
-
 import React, { useMemo } from 'react';
 
 // Exporting interfaces to be used by other components
@@ -16,12 +15,11 @@ export interface Section {
 
 interface LessonTextTabProps {
   content: string;
+  activeReadingId?: string | null;
 }
 
 /**
  * Parses markdown-like content into a structured format for the lesson pathway.
- * @param content The lesson content string.
- * @returns An array of Section objects.
  */
 export const parseContent = (content: string): Section[] => {
   const parsed: Section[] = [];
@@ -113,7 +111,7 @@ const getIcon = (title: string) => {
   );
 };
 
-const LessonTextTab: React.FC<LessonTextTabProps> = ({ content }) => {
+const LessonTextTab: React.FC<LessonTextTabProps> = ({ content, activeReadingId }) => {
   const sections = useMemo(() => parseContent(content), [content]);
 
   const renderFormattedContent = (text: string) => {
@@ -147,25 +145,36 @@ const LessonTextTab: React.FC<LessonTextTabProps> = ({ content }) => {
           </div>
           
           <div className="space-y-6">
-            {section.subsections.map((sub) => (
-              <section 
-                key={sub.id} 
-                id={sub.id} 
-                className="bg-white rounded-[40px] p-8 md:p-10 shadow-sm border border-gray-100 hover:shadow-md transition-shadow group scroll-mt-32"
-              >
-                <div className="flex items-center gap-4 mb-8">
-                  <div className="w-12 h-12 rounded-2xl bg-pink-50 text-[#EF4E92] flex items-center justify-center transition-colors group-hover:bg-[#EF4E92] group-hover:text-white">
-                    {getIcon(sub.title)}
+            {section.subsections.map((sub) => {
+              const isActive = activeReadingId === sub.id;
+              return (
+                <section 
+                  key={sub.id} 
+                  id={sub.id} 
+                  className={`bg-white rounded-[40px] p-8 md:p-10 shadow-sm border-4 transition-all group scroll-mt-32 duration-500 ${
+                    isActive 
+                    ? 'border-[#EF4E92] shadow-2xl scale-[1.01] ring-8 ring-pink-50' 
+                    : 'border-gray-50 hover:shadow-md'
+                  }`}
+                >
+                  <div className="flex items-center gap-4 mb-8">
+                    <div className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all ${
+                      isActive ? 'bg-[#EF4E92] text-white scale-110 rotate-3' : 'bg-pink-50 text-[#EF4E92] group-hover:bg-[#EF4E92] group-hover:text-white'
+                    }`}>
+                      {getIcon(sub.title)}
+                    </div>
+                    <h3 className={`text-2xl font-black tracking-tight transition-colors ${
+                      isActive ? 'text-[#EF4E92]' : 'text-gray-900'
+                    }`}>
+                      {sub.title}
+                    </h3>
                   </div>
-                  <h3 className="text-2xl font-black text-gray-900 tracking-tight">
-                    {sub.title}
-                  </h3>
-                </div>
-                <div className="text-lg md:text-xl font-serif text-gray-800 leading-relaxed selection:bg-pink-100">
-                  {renderFormattedContent(sub.content)}
-                </div>
-              </section>
-            ))}
+                  <div className="text-lg md:text-xl font-serif text-gray-800 leading-relaxed selection:bg-pink-100">
+                    {renderFormattedContent(sub.content)}
+                  </div>
+                </section>
+              );
+            })}
           </div>
         </div>
       ))}

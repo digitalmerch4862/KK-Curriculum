@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo } from 'react';
 import { db } from '../services/supabaseService.ts';
 import { Lesson, Profile } from '../types.ts';
@@ -30,6 +29,7 @@ const LessonDetail: React.FC<LessonDetailProps> = ({ lessonId, user, onBack }) =
   const [completed, setCompleted] = useState(false);
   const [loading, setLoading] = useState(true);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [activeReadingId, setActiveReadingId] = useState<string | null>(null);
   
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [downloadUrl, setDownloadUrl] = useState<string | null>(null);
@@ -104,7 +104,10 @@ const LessonDetail: React.FC<LessonDetailProps> = ({ lessonId, user, onBack }) =
   return (
     <div className="min-h-screen bg-white pb-24 lg:pb-0">
       {/* TTS AUDIO CONTROLLER */}
-      <TTSController sections={sections} />
+      <TTSController 
+        sections={sections} 
+        onActiveIdChange={setActiveReadingId} 
+      />
 
       {/* PREVIEW MODAL */}
       {previewUrl && (
@@ -237,7 +240,10 @@ const LessonDetail: React.FC<LessonDetailProps> = ({ lessonId, user, onBack }) =
           {/* MAIN CONTENT AREA */}
           <div className="lg:col-span-9 space-y-24">
             {/* LESSON BODY (READ, TEACH, ENGAGE) */}
-            <LessonTextTab content={lesson.content} />
+            <LessonTextTab 
+              content={lesson.content} 
+              activeReadingId={activeReadingId} 
+            />
 
             {/* INTERACTIVE ACTIVITIES */}
             <section id="activities-section" className="space-y-12 pt-12 border-t border-gray-100 scroll-mt-32">
