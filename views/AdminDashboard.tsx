@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { db } from '../services/supabaseService.ts';
 import { categorizeLessonTitle, generateFullLesson } from '../services/geminiService.ts';
@@ -7,7 +6,7 @@ import { Lesson, LessonStatus, UserRole, Profile, LessonActivity, LessonVideo, A
 // Helper components defined outside of the main component
 
 const SectionHeader: React.FC<{ title: string }> = ({ title }) => (
-  <div className="flex items-center gap-3 mb-6 md:mb-8">
+  <div className="flex items-center gap-3 mb-4 md:mb-6">
     <div className="h-5 md:h-6 w-1 md:w-1.5 bg-[#EF4E92] rounded-full"></div>
     <h3 className="font-black text-lg md:text-xl tracking-tight uppercase text-[#003882]">{title}</h3>
   </div>
@@ -32,7 +31,6 @@ const SubSectionCard: React.FC<SubSectionCardProps> = ({
   const isBibleCard = sub.title.toLowerCase().includes('bible text');
 
   const fetchBibleText = async () => {
-    // Sanitize input: remove extra spaces and normalize special dashes (en-dash, em-dash)
     const sanitizedQuery = bibleReference.trim().replace(/–|—/g, '-');
     
     if (!sanitizedQuery) {
@@ -66,23 +64,23 @@ const SubSectionCard: React.FC<SubSectionCardProps> = ({
   };
 
   return (
-    <div className="bg-white p-8 md:p-10 rounded-[40px] relative shadow-sm border-2 border-transparent hover:border-pink-50 transition-all group flex flex-col min-h-[220px]">
+    <div className="bg-white p-5 md:p-6 rounded-[30px] relative shadow-sm border-2 border-transparent hover:border-pink-50 transition-all group flex flex-col min-h-[160px]">
       {!isBibleCard && (
         <button 
           onClick={(e) => { e.stopPropagation(); onDelete(); }} 
-          className="absolute top-6 right-8 text-gray-300 hover:text-red-500 transition-colors z-10"
+          className="absolute top-4 right-6 text-gray-300 hover:text-red-500 transition-colors z-10"
           aria-label="Delete section"
         >
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M6 18L18 6M6 6l12 12" />
           </svg>
         </button>
       )}
       
-      <div className="mb-4">
+      <div className="mb-2">
         <input 
           type="text"
-          className="w-full bg-transparent border-none text-xs font-black uppercase tracking-widest text-gray-400 focus:text-[#003882] outline-none"
+          className="w-full bg-transparent border-none text-[10px] font-black uppercase tracking-widest text-gray-400 focus:text-[#003882] outline-none"
           value={sub.title}
           onChange={e => onUpdate({ title: e.target.value })}
           placeholder="Section Label"
@@ -91,12 +89,12 @@ const SubSectionCard: React.FC<SubSectionCardProps> = ({
       </div>
 
       {isBibleCard && (
-        <div className="mb-6">
-          <div className="flex flex-col gap-3">
+        <div className="mb-4">
+          <div className="flex flex-col gap-2">
             <div className="relative">
               <input 
                 type="text"
-                className="w-full bg-gray-50 border-2 border-gray-100 rounded-2xl px-6 py-4 text-sm focus:border-[#EF4E92] outline-none transition-all font-medium"
+                className="w-full bg-gray-50 border-2 border-gray-100 rounded-xl px-4 py-3 text-xs focus:border-[#EF4E92] outline-none transition-all font-medium"
                 placeholder="Reference (e.g. Genesis 1-2)"
                 value={bibleReference}
                 onChange={e => setBibleReference(e.target.value)}
@@ -106,13 +104,13 @@ const SubSectionCard: React.FC<SubSectionCardProps> = ({
             <button 
               onClick={fetchBibleText}
               disabled={isFetching}
-              className="w-full h-12 bg-[#003882] text-white rounded-2xl flex items-center justify-center gap-2 hover:bg-[#003882]/90 disabled:opacity-50 transition-all shadow-sm font-black uppercase tracking-widest text-[10px]"
+              className="w-full h-10 bg-[#003882] text-white rounded-xl flex items-center justify-center gap-2 hover:bg-[#003882]/90 disabled:opacity-50 transition-all shadow-sm font-black uppercase tracking-widest text-[9px]"
             >
               {isFetching ? (
-                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
               ) : (
                 <>
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                   </svg>
                   <span>Fetch Verses</span>
@@ -124,9 +122,9 @@ const SubSectionCard: React.FC<SubSectionCardProps> = ({
       )}
 
       <textarea 
-        rows={6} 
+        rows={4} 
         placeholder={placeholder} 
-        className="w-full bg-transparent border-none text-base leading-relaxed outline-none resize-none text-gray-600 font-medium flex-1 scrollbar-hide" 
+        className="w-full bg-transparent border-none text-sm leading-relaxed outline-none resize-none text-gray-600 font-medium flex-1 scrollbar-hide" 
         value={sub.content} 
         onChange={e => onUpdate({ content: e.target.value })} 
       />
@@ -185,7 +183,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
   const [isCategorizing, setIsCategorizing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // AI Modal States
   const [isAiModalOpen, setIsAiModalOpen] = useState(false);
   const [aiStep, setAiStep] = useState<'questions' | 'preview'>('questions');
   const [aiGoal, setAiGoal] = useState('');
@@ -450,18 +447,18 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
         <button onClick={onLogout} className="text-[10px] md:text-xs font-black uppercase text-[#EF4E92] tracking-widest hover:text-[#EF4E92]/80 transition-colors">Log out</button>
       </header>
 
-      <div className="max-w-[1600px] mx-auto p-6 md:p-12 grid grid-cols-1 lg:grid-cols-12 gap-8 md:gap-16">
-        <div className={`lg:col-span-3 space-y-8 ${editingId ? 'hidden lg:block' : 'block'}`}>
+      <div className="max-w-[1600px] mx-auto p-6 md:p-8 grid grid-cols-1 lg:grid-cols-12 gap-6 md:gap-10">
+        <div className={`lg:col-span-3 space-y-6 ${editingId ? 'hidden lg:block' : 'block'}`}>
           <div className="flex items-center justify-between">
             <h2 className="font-black text-2xl md:text-3xl tracking-tighter text-[#003882]">Lessons</h2>
             <button onClick={handleNew} className="bg-[#EF4E92] text-white px-5 py-2.5 rounded-full text-[9px] md:text-[10px] font-black uppercase tracking-widest shadow-xl hover:bg-[#EF4E92]/90 transition-all">+ NEW</button>
           </div>
-          <div className="space-y-4 overflow-y-auto lg:max-h-[calc(100vh-280px)] pr-2 scrollbar-hide">
+          <div className="space-y-4 overflow-y-auto lg:max-h-[calc(100vh-220px)] pr-2 scrollbar-hide">
             {lessons.map(l => (
-              <div key={l.id} onClick={() => handleEdit(l.id)} className={`p-5 md:p-6 rounded-[32px] border transition-all cursor-pointer relative ${editingId === l.id ? 'border-pink-500 bg-pink-50/30' : 'border-gray-50 bg-white hover:border-gray-200 shadow-sm'}`}>
-                <h3 className="font-bold text-sm line-clamp-1 text-gray-800 mb-3">{l.title || 'Untitled'}</h3>
+              <div key={l.id} onClick={() => handleEdit(l.id)} className={`p-4 md:p-5 rounded-[28px] border transition-all cursor-pointer relative ${editingId === l.id ? 'border-pink-500 bg-pink-50/30' : 'border-gray-50 bg-white hover:border-gray-200 shadow-sm'}`}>
+                <h3 className="font-bold text-sm line-clamp-1 text-gray-800 mb-2">{l.title || 'Untitled'}</h3>
                 <div className="flex items-center justify-between">
-                  <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">{l.category}</p>
+                  <p className="text-[9px] text-gray-400 font-bold uppercase tracking-widest">{l.category}</p>
                   <span className={`text-[8px] font-black uppercase px-2 py-0.5 rounded-full ${l.status === LessonStatus.PUBLISHED ? 'bg-green-500 text-white' : 'bg-orange-500 text-white'}`}>{l.status}</span>
                 </div>
               </div>
@@ -476,28 +473,28 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
               <p className="font-black uppercase tracking-[0.3em] text-[10px]">Select or Create a lesson</p>
             </div>
           ) : (
-            <div className="space-y-16 animate-in fade-in slide-in-from-bottom-6 duration-700 pb-20">
-              <div className="bg-white/95 backdrop-blur-md p-4 md:p-6 rounded-full border border-gray-100 shadow-xl flex flex-wrap items-center justify-between sticky top-[92px] z-40 gap-4">
-                <h2 className="font-black text-lg md:text-2xl px-4 text-[#003882] truncate max-w-[200px]">{formData.title || 'Draft Lesson'}</h2>
-                <div className="flex items-center gap-3">
-                  <button onClick={() => setEditingId(null)} className="px-6 py-3 text-xs font-black uppercase text-gray-400 hover:text-black tracking-widest">DISCARD</button>
-                  <button onClick={() => setIsAiModalOpen(true)} className="px-8 py-4 bg-[#EF4E92] rounded-full text-xs font-black uppercase tracking-widest text-white shadow-lg hover:scale-[1.02] transition-transform">AI ARCHITECT</button>
-                  <button onClick={() => handleSave(LessonStatus.DRAFT)} className="px-10 py-4 bg-[#003882] rounded-full text-xs font-black uppercase tracking-widest text-white shadow-lg transition-transform hover:scale-[1.02]">DRAFT</button>
-                  <button onClick={() => handleSave(LessonStatus.PUBLISHED)} className="px-12 py-4 bg-[#EF4E92] rounded-full text-xs font-black uppercase tracking-widest text-white shadow-lg transition-transform hover:scale-[1.02]">PUBLISH</button>
+            <div className="space-y-10 animate-in fade-in slide-in-from-bottom-6 duration-700 pb-20">
+              <div className="bg-white/95 backdrop-blur-md p-3 md:p-4 rounded-full border border-gray-100 shadow-xl flex flex-wrap items-center justify-between sticky top-[92px] z-40 gap-3">
+                <h2 className="font-black text-md md:text-xl px-4 text-[#003882] truncate max-w-[200px]">{formData.title || 'Draft Lesson'}</h2>
+                <div className="flex items-center gap-2">
+                  <button onClick={() => setEditingId(null)} className="px-4 py-2 text-[10px] font-black uppercase text-gray-400 hover:text-black tracking-widest">DISCARD</button>
+                  <button onClick={() => setIsAiModalOpen(true)} className="px-5 py-3 bg-[#EF4E92] rounded-full text-[10px] font-black uppercase tracking-widest text-white shadow-lg hover:scale-[1.02] transition-transform">AI ARCHITECT</button>
+                  <button onClick={() => handleSave(LessonStatus.DRAFT)} className="px-6 py-3 bg-[#003882] rounded-full text-[10px] font-black uppercase tracking-widest text-white shadow-lg transition-transform hover:scale-[1.02]">DRAFT</button>
+                  <button onClick={() => handleSave(LessonStatus.PUBLISHED)} className="px-8 py-3 bg-[#EF4E92] rounded-full text-[10px] font-black uppercase tracking-widest text-white shadow-lg transition-transform hover:scale-[1.02]">PUBLISH</button>
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-12">
-                <div className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <div className="space-y-3">
                   <SectionHeader title="Lesson Identity" />
-                  <input placeholder="Lesson Title..." className="w-full bg-white border border-gray-100 rounded-[32px] px-8 py-7 font-black text-2xl text-gray-800 outline-none shadow-sm focus:border-pink-300 transition-all" value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})} />
+                  <input placeholder="Lesson Title..." className="w-full bg-white border border-gray-100 rounded-[28px] px-6 py-5 font-black text-xl text-gray-800 outline-none shadow-sm focus:border-pink-300 transition-all" value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})} />
                 </div>
-                <div className="space-y-4">
+                <div className="space-y-3">
                   <SectionHeader title="Category" />
-                  <div className="flex items-center gap-4">
+                  <div className="flex items-center gap-3">
                     <div className="relative flex-1">
                       <select 
-                        className="w-full bg-white border border-gray-100 rounded-[32px] px-8 py-7 text-sm font-black appearance-none outline-none shadow-sm focus:border-pink-300 transition-all cursor-pointer"
+                        className="w-full bg-white border border-gray-100 rounded-[28px] px-6 py-5 text-xs font-black appearance-none outline-none shadow-sm focus:border-pink-300 transition-all cursor-pointer"
                         value={formData.category} 
                         onChange={e => setFormData({...formData, category: e.target.value})}
                       >
@@ -507,38 +504,27 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
                     <button 
                       onClick={handleAutoCategorize} 
                       disabled={isCategorizing} 
-                      className="shrink-0 w-16 h-16 bg-white border border-gray-100 rounded-full flex items-center justify-center font-black text-[#EF4E92] shadow-sm hover:scale-110 active:scale-95 transition-all"
+                      className="shrink-0 w-14 h-14 bg-white border border-gray-100 rounded-full flex items-center justify-center font-black text-[#EF4E92] shadow-sm hover:scale-110 active:scale-95 transition-all"
                       title="AI Auto-Categorize"
                     >
-                      {isCategorizing ? <div className="w-6 h-6 border-2 border-pink-500 border-t-transparent rounded-full animate-spin"></div> : "AI"}
+                      {isCategorizing ? <div className="w-5 h-5 border-2 border-pink-500 border-t-transparent rounded-full animate-spin"></div> : "AI"}
                     </button>
                   </div>
                 </div>
               </div>
 
-              <div className="space-y-8">
-                <SectionHeader title="Lesson Summary" />
-                <textarea 
-                  rows={3} 
-                  placeholder="A short overview for teachers..." 
-                  className="w-full bg-white border border-gray-100 rounded-[32px] px-8 py-7 text-base font-medium text-gray-600 outline-none shadow-sm focus:border-pink-300 transition-all resize-none" 
-                  value={formData.summary} 
-                  onChange={e => setFormData({...formData, summary: e.target.value})} 
-                />
-              </div>
-
-              <div className="space-y-8">
+              <div className="space-y-6">
                 <SectionHeader title="Lesson Body" />
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6">
                   {(['read', 'teach', 'engage'] as const).map((col) => (
-                    <div key={col} className="bg-gray-50/60 rounded-[64px] p-8 md:p-10 flex flex-col min-h-[600px] border border-gray-100/50">
-                      <div className="flex items-center justify-between mb-8 px-4">
-                        <h4 className="font-black text-xs md:text-sm text-[#003882] uppercase tracking-[0.2em]">{col}</h4>
+                    <div key={col} className="bg-gray-50/60 rounded-[48px] p-6 md:p-8 flex flex-col min-h-[500px] border border-gray-100/50">
+                      <div className="flex items-center justify-between mb-6 px-3">
+                        <h4 className="font-black text-[10px] md:text-xs text-[#003882] uppercase tracking-[0.2em]">{col}</h4>
                         <button onClick={() => addSubSection(col)} className="text-gray-300 hover:text-[#EF4E92] transition-colors">
-                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M12 6v6m0 0v6m0-6h6m-6 0H6" /></svg>
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M12 6v6m0 0v6m0-6h6m-6 0H6" /></svg>
                         </button>
                       </div>
-                      <div className="space-y-6">
+                      <div className="space-y-4">
                         {structure[col].map(sub => (
                           <SubSectionCard key={sub.id} sub={sub} onUpdate={updates => updateSubSection(col, sub.id, updates)} onDelete={() => deleteSubSection(col, sub.id)} placeholder={`Content for ${sub.title}...`} />
                         ))}
@@ -548,33 +534,33 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
                 </div>
               </div>
 
-              <div className="space-y-8">
+              <div className="space-y-6">
                 <SectionHeader title="Interactive Activities" />
                 <button 
                   onClick={() => setActivities([...activities, { title: '', instructions: '', supplies: [], duration_minutes: 15 }])} 
-                  className="bg-[#EF4E92] text-white px-8 py-4 rounded-full text-xs font-black uppercase tracking-widest shadow-lg hover:bg-[#EF4E92]/90 transition-all flex items-center gap-2"
+                  className="bg-[#EF4E92] text-white px-6 py-3 rounded-full text-[10px] font-black uppercase tracking-widest shadow-lg hover:bg-[#EF4E92]/90 transition-all flex items-center gap-2"
                 >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M12 9v6m3-3H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z" />
                   </svg>
                   ADD ACTIVITY
                 </button>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                   {activities.map((act, idx) => (
-                    <div key={idx} className="bg-white border border-gray-100 rounded-[56px] p-10 shadow-sm space-y-6 relative">
+                    <div key={idx} className="bg-white border border-gray-100 rounded-[40px] p-8 shadow-sm space-y-4 relative">
                       <button 
                         onClick={() => setActivities(activities.filter((_, i) => i !== idx))} 
-                        className="absolute top-10 right-10 text-gray-300 hover:text-red-500 transition-colors"
+                        className="absolute top-8 right-8 text-gray-300 hover:text-red-500 transition-colors"
                         aria-label="Remove activity"
                       >
-                        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                         </svg>
                       </button>
-                      <input placeholder="Activity Title" className="text-xl font-black w-full bg-gray-50 rounded-2xl px-6 py-4 border-none outline-none" value={act.title} onChange={e => {
+                      <input placeholder="Activity Title" className="text-lg font-black w-full bg-gray-50 rounded-xl px-5 py-3 border-none outline-none" value={act.title} onChange={e => {
                         const n = [...activities]; n[idx].title = e.target.value; setActivities(n);
                       }} />
-                      <textarea placeholder="Step-by-step instructions..." className="w-full bg-gray-50 rounded-2xl p-6 text-sm min-h-[150px] resize-none outline-none font-medium leading-relaxed" value={act.instructions} onChange={e => {
+                      <textarea placeholder="Step-by-step instructions..." className="w-full bg-gray-50 rounded-xl p-5 text-xs min-h-[120px] resize-none outline-none font-medium leading-relaxed" value={act.instructions} onChange={e => {
                         const n = [...activities]; n[idx].instructions = e.target.value; setActivities(n);
                       }} />
                     </div>
@@ -582,25 +568,25 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
                 </div>
               </div>
 
-              <div className="space-y-8">
+              <div className="space-y-6">
                 <SectionHeader title="Videos & Media" />
-                <button onClick={() => setVideos([...videos, { title: '', url: '', provider: 'youtube' }])} className="bg-[#003882] text-white px-8 py-3 rounded-full text-xs font-black uppercase tracking-widest shadow-lg hover:bg-[#003882]/90 transition-all">+ ADD VIDEO</button>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
+                <button onClick={() => setVideos([...videos, { title: '', url: '', provider: 'youtube' }])} className="bg-[#003882] text-white px-6 py-2.5 rounded-full text-[10px] font-black uppercase tracking-widest shadow-lg hover:bg-[#003882]/90 transition-all">+ ADD VIDEO</button>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                   {videos.map((vid, idx) => (
-                    <div key={idx} className="bg-white border border-gray-100 rounded-[56px] p-10 shadow-sm space-y-6 relative">
+                    <div key={idx} className="bg-white border border-gray-100 rounded-[40px] p-8 shadow-sm space-y-4 relative">
                       <button 
                         onClick={() => setVideos(videos.filter((_, i) => i !== idx))} 
-                        className="absolute top-10 right-10 text-gray-300 hover:text-red-500 transition-colors"
+                        className="absolute top-8 right-8 text-gray-300 hover:text-red-500 transition-colors"
                         aria-label="Remove video"
                       >
                         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                         </svg>
                       </button>
-                      <input placeholder="Video Title" className="text-sm font-bold w-full bg-gray-50 rounded-2xl px-6 py-4 border-none outline-none" value={vid.title} onChange={e => {
+                      <input placeholder="Video Title" className="text-xs font-bold w-full bg-gray-50 rounded-xl px-5 py-3 border-none outline-none" value={vid.title} onChange={e => {
                         const n = [...videos]; n[idx].title = e.target.value; setVideos(n);
                       }} />
-                      <input placeholder="YouTube or Vimeo URL" className="text-sm font-medium w-full bg-gray-50 rounded-2xl px-6 py-4 border-none outline-none text-blue-600" value={vid.url} onChange={e => {
+                      <input placeholder="YouTube or Vimeo URL" className="text-xs font-medium w-full bg-gray-50 rounded-xl px-5 py-3 border-none outline-none text-blue-600" value={vid.url} onChange={e => {
                         const n = [...videos]; n[idx].url = e.target.value; setVideos(n);
                       }} />
                     </div>
@@ -608,25 +594,25 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
                 </div>
               </div>
 
-              <div className="space-y-8">
+              <div className="space-y-6">
                 <SectionHeader title="Resources & Downloads" />
-                <button onClick={() => setAttachments([...attachments, { name: '', storage_path: '', type: 'pdf' }])} className="bg-[#EF4E92] text-white px-8 py-3 rounded-full text-xs font-black uppercase tracking-widest shadow-lg hover:bg-[#EF4E92]/90 transition-all">+ ADD RESOURCE</button>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
+                <button onClick={() => setAttachments([...attachments, { name: '', storage_path: '', type: 'pdf' }])} className="bg-[#EF4E92] text-white px-6 py-2.5 rounded-full text-[10px] font-black uppercase tracking-widest shadow-lg hover:bg-[#EF4E92]/90 transition-all">+ ADD RESOURCE</button>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                   {attachments.map((att, idx) => (
-                    <div key={idx} className="bg-white border border-gray-100 rounded-[56px] p-10 shadow-sm space-y-6 relative">
+                    <div key={idx} className="bg-white border border-gray-100 rounded-[40px] p-8 shadow-sm space-y-4 relative">
                       <button 
                         onClick={() => setAttachments(attachments.filter((_, i) => i !== idx))} 
-                        className="absolute top-10 right-10 text-gray-300 hover:text-red-500 transition-colors"
+                        className="absolute top-8 right-8 text-gray-300 hover:text-red-500 transition-colors"
                         aria-label="Remove resource"
                       >
                         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                         </svg>
                       </button>
-                      <input placeholder="Resource Name (e.g. Coloring Sheet)" className="text-sm font-bold w-full bg-gray-50 rounded-2xl px-6 py-4 border-none outline-none" value={att.name || ''} onChange={e => {
+                      <input placeholder="Resource Name (e.g. Coloring Sheet)" className="text-xs font-bold w-full bg-gray-50 rounded-xl px-5 py-3 border-none outline-none" value={att.name || ''} onChange={e => {
                         const n = [...attachments]; n[idx].name = e.target.value; setAttachments(n);
                       }} />
-                      <input placeholder="URL to PDF/Image" className="text-sm font-medium w-full bg-gray-50 rounded-2xl px-6 py-4 border-none outline-none text-blue-600" value={att.storage_path || ''} onChange={e => {
+                      <input placeholder="URL to PDF/Image" className="text-xs font-medium w-full bg-gray-50 rounded-xl px-5 py-3 border-none outline-none text-blue-600" value={att.storage_path || ''} onChange={e => {
                         const n = [...attachments]; n[idx].storage_path = e.target.value; setAttachments(n);
                       }} />
                     </div>
