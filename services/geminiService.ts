@@ -1,5 +1,4 @@
-
-import { GoogleGenAI, Type, Modality } from "@google/genai";
+import { GoogleGenAI, Type, Modality, HarmCategory, HarmBlockThreshold } from "@google/genai";
 
 /**
  * Service for generating Sunday School lesson content and audio using Gemini.
@@ -124,22 +123,72 @@ export const generateActivitiesDraft = async (content: string, gradeRange: strin
 };
 
 /**
- * Generates audio bytes from text using the Gemini TTS model.
+ * Sanitizes text for TTS to prevent API rejection errors.
+ * Common issues: special characters, unicode, very short text, non-speech content.
  */
-export const generateTTS = async (text: string, voiceName: string = 'Kore') => {
-  const response = await ai.models.generateContent({
-    model: "gemini-2.5-flash-preview-tts",
-    contents: [{ parts: [{ text: text }] }],
-    config: {
-      responseModalities: [Modality.AUDIO],
-      speechConfig: {
-        voiceConfig: {
-          prebuiltVoiceConfig: { voiceName: voiceName },
-        },
-      },
-    },
-  });
+function sanitizeForTTS(text: string): string | null {
+  if (!text || typeof text !== 'string') return null;
+  
+  let cleaned = text.trim();
+  
+  // Minimum length check
+  if (cleaned.length < 10) return null;
+  
+  // Replace unicode characters that TTS doesn't like
+  cleaned = cleaned
+    .replace(/[\u2018\u2019]/g, "'") // Smart single quotes
+    .replace(/[\u201C\u201D]/g, '"') // Smart double quotes
+    .replace(/[\u2013\u2014]/g, '-') // Em/en dashes
+    .replace(/[\u2026]/g, '...') // Ellipsis
+    .replace(/[^\x00-\x7F]/g, '') // Remove non-ASCII
+    .replace(/[^\w\s.,!?;:'\-()&]/g, ' ') // Keep only safe punctuation
+    .replace(/\s+/g, ' ') // Normalize whitespace
+    .trim();
+  
+  // Final length check
+  if (cleaned.length < 10) return null;
+  
+  // Add terminal punctuation if missing
+  if (!/[.!?]$/.test(cleaned)) {
+    cleaned += '.';
+  }
+  
+  return cleaned;
+}
 
-  const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
-  return base64Audio;
+/**
+ * Generates audio bytes from text using the Gemini TTS model.
+ * Includes robust input validation to prevent API errors.
+ */
+export const generateTTS = async (text: string, voiceName: string = 'kore') => {
+  // Validate and sanitize input
+  const sanitized = sanitizeForTTS(text);
+  
+  if (!sanitized) {
+    console.warn('TTS: Text too short or invalid after sanitization');
+    return null;
+  }
+  
+  try {
+    const response = await ai.models.generateContent({
+      model: "gemini-2.5-flash-preview-tts",
+      contents: [{ parts: [{ text: sanitized }] }],
+      config: {
+        responseModalities: [Modality.AUDIO],
+        speechConfig: {
+          voiceConfig: {
+            prebuiltVoiceConfig: { voiceName: voiceName.toLowerCase() },
+          },
+        },
+        // Remove safetySettings entirely - TTS model doesn't support them
+        // The model will use default safety settings automatically
+      },
+    });
+
+    const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+    return base64Audio || null;
+  } catch (error) {
+    console.error('TTS Generation Error:', error);
+    throw error; // Re-throw so caller can handle
+  }
 };

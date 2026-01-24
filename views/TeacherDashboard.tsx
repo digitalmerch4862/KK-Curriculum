@@ -103,7 +103,6 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
   const categories = ['All', ...Array.from(new Set(lessons.map(l => l.category)))];
   const lessonStructure = selectedLesson ? parseMarkdownToStructure(selectedLesson.content || '') : null;
 
-  // Adapt structure for TTSController
   const ttsSections = useMemo(() => {
     if (!lessonStructure) return [];
     return [
@@ -116,7 +115,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
   return (
     <div className="min-h-screen bg-[#F4F7FA] text-slate-900 pb-20 font-sans selection:bg-pink-100">
       
-      {/* --- VIDEOKE CONTROL FAB --- */}
+      {/* --- VIDEOKE CONTROL --- */}
       {selectedLesson && (
         <TTSController 
           sections={ttsSections}
@@ -125,16 +124,16 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
         />
       )}
 
-      {/* --- RESOURCE PREVIEW MODAL --- */}
+      {/* --- RESOURCE PREVIEW --- */}
       {viewingResource && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/95 backdrop-blur-md p-0 md:p-4">
           <div className="bg-white w-full max-w-6xl h-full md:h-[90vh] md:rounded-[40px] overflow-hidden flex flex-col shadow-2xl">
             <div className="p-4 md:p-6 border-b flex items-center justify-between bg-white sticky top-0">
-              <div className="flex items-center gap-3">
-                <FileText className="text-pink-500" />
-                <h3 className="font-black text-sm md:text-xl truncate max-w-[150px] md:max-w-md">{viewingResource.name}</h3>
+              <div className="flex items-center gap-3 min-w-0">
+                <FileText className="text-pink-500 shrink-0" />
+                <h3 className="font-black text-sm md:text-xl truncate">{viewingResource.name}</h3>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 shrink-0">
                 <button onClick={() => handlePrint(viewingResource.storage_path)} className="bg-[#003882] text-white px-4 py-2 rounded-full text-[10px] font-black uppercase tracking-widest flex items-center gap-2">
                   <Printer size={14} /> Print
                 </button>
@@ -151,27 +150,25 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
         <div className="fixed bottom-6 right-6 z-[70] flex flex-col items-end gap-3">
           <div className={`flex flex-col gap-2 mb-2 transition-all duration-300 origin-bottom-right max-h-[60vh] overflow-y-auto pr-1 scrollbar-hide ${isNavExpanded ? 'scale-100 opacity-100' : 'scale-0 opacity-0 pointer-events-none'}`}>
             <button onClick={() => setSelectedLesson(null)} className="bg-slate-900 text-white px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-xl flex items-center gap-2 self-end">
-              <Home size={14} /> Exit Lesson
+              Exit Lesson
             </button>
             <div className="w-px h-4 bg-slate-200 self-end mr-6"></div>
             {lessonStructure.read.map(item => (
-              <button key={item.id} onClick={() => scrollToSection(item.id)} className="bg-blue-600 text-white px-5 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-lg text-right hover:bg-blue-700 transition-all">{item.title}</button>
+              <button key={item.id} onClick={() => scrollToSection(item.id)} className="bg-[#2563eb] text-white px-5 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-lg text-right hover:scale-105 transition-all">{item.title}</button>
             ))}
             {lessonStructure.teach.map(item => (
-              <button key={item.id} onClick={() => scrollToSection(item.id)} className="bg-emerald-600 text-white px-5 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-lg text-right hover:bg-emerald-700 transition-all">{item.title}</button>
+              <button key={item.id} onClick={() => scrollToSection(item.id)} className="bg-[#10b981] text-white px-5 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-lg text-right hover:scale-105 transition-all">{item.title}</button>
             ))}
             {lessonStructure.engage.map(item => (
-              <button key={item.id} onClick={() => scrollToSection(item.id)} className="bg-[#EF4E92] text-white px-5 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-lg text-right hover:bg-pink-600 transition-all">{item.title}</button>
+              <button key={item.id} onClick={() => scrollToSection(item.id)} className="bg-[#EF4E92] text-white px-5 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-lg text-right hover:scale-105 transition-all">{item.title}</button>
             ))}
           </div>
-          <button onClick={() => setIsNavExpanded(!isNavExpanded)} className={`px-8 py-4 rounded-full flex items-center gap-3 shadow-2xl transition-all duration-500 font-black text-xs uppercase tracking-[0.2em] ${isNavExpanded ? 'bg-slate-900 text-white' : 'bg-[#EF4E92] text-white'}`}>
-            {isNavExpanded ? <X size={18} strokeWidth={3} /> : <Menu size={18} strokeWidth={3} />}
-            <span>{isNavExpanded ? 'Close Map' : 'Lesson Map'}</span>
+          <button onClick={() => setIsNavExpanded(!isNavExpanded)} className={`w-16 h-16 rounded-full flex items-center justify-center shadow-2xl transition-all duration-500 ${isNavExpanded ? 'bg-slate-900 text-white' : 'bg-[#EF4E92] text-white'}`}>
+            {isNavExpanded ? <X size={24} strokeWidth={3} /> : <Menu size={24} strokeWidth={3} />}
           </button>
         </div>
       )}
 
-      {/* --- HEADER --- */}
       <header className="sticky top-0 z-50 bg-white/95 backdrop-blur-md border-b border-slate-200 px-6 py-4">
         <div className="max-w-7xl mx-auto flex items-center justify-between gap-4">
           <div className="flex items-center gap-3 cursor-pointer" onClick={() => setSelectedLesson(null)}>
@@ -182,7 +179,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
           {!selectedLesson && (
             <div className="flex-1 max-w-md hidden md:block relative">
               <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-              <input type="text" placeholder="Find a mission..." className="w-full bg-slate-100 rounded-full pl-12 pr-6 py-2.5 text-sm focus:ring-2 focus:ring-pink-500 outline-none transition-all" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
+              <input type="text" placeholder="Search mission control..." className="w-full bg-slate-100 rounded-full pl-12 pr-6 py-2.5 text-sm focus:ring-2 focus:ring-pink-500 outline-none transition-all" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
             </div>
           )}
 
@@ -194,7 +191,6 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
 
       <main className="max-w-7xl mx-auto px-6 mt-10">
         {!selectedLesson ? (
-          /* --- LIST VIEW --- */
           <div className="space-y-10">
             <div className="flex gap-2 overflow-x-auto pb-4 scrollbar-hide -mx-6 px-6">
               {categories.map(cat => (
@@ -216,7 +212,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
             </div>
           </div>
         ) : (
-          /* --- STRICT SINGLE COLUMN LESSON VIEW --- */
+          /* --- STRICT SINGLE COLUMN VIEW --- */
           <div className="max-w-4xl mx-auto animate-in fade-in slide-in-from-bottom-6 duration-700">
             <div className="mb-20">
               <span className="bg-[#EF4E92] text-white px-5 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest shadow-md inline-block">{selectedLesson.category}</span>
@@ -260,7 +256,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
             </div>
 
             {/* Media HUB */}
-            <section id="media-section" className="mt-40 scroll-mt-24">
+            <section id="media-hub" className="mt-40 scroll-mt-24">
               <div className="flex items-center gap-3 mb-12">
                 <div className="h-10 w-2 bg-slate-800 rounded-full"></div>
                 <h3 className="text-3xl font-black text-[#003882] uppercase tracking-tighter">Media Hub</h3>
@@ -275,7 +271,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
                         <button onClick={() => setActiveVideo(vid)} className="w-24 h-24 bg-white text-slate-900 rounded-full flex items-center justify-center hover:scale-110 active:scale-95 transition-all shadow-2xl relative z-10">
                           <Play fill="currentColor" size={32} />
                         </button>
-                        <span className="text-white/60 font-black mt-8 uppercase text-[11px] tracking-widest relative z-10">{vid.title || 'Start Video'}</span>
+                        <span className="text-white/60 font-black mt-8 uppercase text-[11px] tracking-widest relative z-10">{vid.title || 'Play Lesson Media'}</span>
                       </div>
                     )}
                   </div>
@@ -284,26 +280,26 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
             </section>
 
             {/* Resources HUB */}
-            <section id="assets-section" className="mt-40 scroll-mt-24 pb-40">
+            <section id="resource-hub" className="mt-40 scroll-mt-24 pb-40">
               <div className="flex items-center gap-3 mb-12">
                 <div className="h-10 w-2 bg-[#003882] rounded-full"></div>
                 <h3 className="text-3xl font-black text-[#003882] uppercase tracking-tighter">Resources</h3>
               </div>
               <div className="grid grid-cols-1 gap-6">
                 {selectedLesson.attachments?.map((att, i) => (
-                  <div key={i} className="bg-white rounded-[40px] p-8 flex items-center justify-between border border-slate-100 shadow-sm hover:shadow-xl transition-all group">
-                    <div className="flex items-center gap-6 min-w-0 flex-1">
+                  <div key={i} className="bg-white rounded-[40px] p-6 md:p-8 flex items-center justify-between border border-slate-100 shadow-sm hover:shadow-xl transition-all group overflow-hidden">
+                    <div className="flex items-center gap-4 md:gap-6 min-w-0 flex-1">
                       <div className="bg-slate-50 p-4 rounded-3xl text-slate-400 group-hover:bg-pink-50 group-hover:text-[#EF4E92] transition-colors shrink-0">
-                        <FileText size={28} />
+                        <FileText size={24} />
                       </div>
                       <div className="min-w-0 flex-1">
-                        <h4 className="font-black text-slate-800 text-base truncate pr-4" title={att.name}>{att.name}</h4>
-                        <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-1">Printable Resource</p>
+                        <h4 className="font-black text-slate-800 text-sm md:text-base truncate pr-4" title={att.name}>{att.name}</h4>
+                        <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-1">Printable Activity</p>
                       </div>
                     </div>
-                    <div className="flex gap-2 shrink-0">
-                      <button onClick={() => setViewingResource(att)} className="p-4 bg-slate-50 text-slate-600 rounded-2xl hover:bg-slate-100 transition-colors"><Eye size={20} /></button>
-                      <button onClick={() => handlePrint(att.storage_path)} className="p-4 bg-blue-50 text-blue-600 rounded-2xl hover:bg-blue-100 transition-colors"><Printer size={20} /></button>
+                    <div className="flex gap-2 shrink-0 ml-4">
+                      <button onClick={() => setViewingResource(att)} className="p-3 md:p-4 bg-slate-50 text-slate-600 rounded-2xl hover:bg-slate-100 transition-colors"><Eye size={20} /></button>
+                      <button onClick={() => handlePrint(att.storage_path)} className="p-3 md:p-4 bg-blue-50 text-blue-600 rounded-2xl hover:bg-blue-100 transition-colors"><Printer size={20} /></button>
                     </div>
                   </div>
                 ))}

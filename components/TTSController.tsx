@@ -15,10 +15,7 @@ interface ReadingItem {
   text: string;
 }
 
-/**
- * Manual base64 decoding helper.
- * Do not use external libraries like js-base64.
- */
+// Manual base64 decoding as per system guidelines (no external libs)
 function decodeBase64(base64: string): Uint8Array {
   const binaryString = atob(base64);
   const len = binaryString.length;
@@ -29,11 +26,9 @@ function decodeBase64(base64: string): Uint8Array {
   return bytes;
 }
 
-/**
- * Manual raw PCM decoding for Gemini TTS output.
- * Gemini TTS returns raw PCM (no header), so decodeAudioData native method won't work.
- */
-async function decodeRawPCMToAudioBuffer(
+// Manual Raw PCM Decoding for Gemini TTS (Raw 16-bit PCM, 24kHz)
+// Native decodeAudioData fails on raw PCM without headers.
+async function decodeRawPCM(
   data: Uint8Array,
   ctx: AudioContext,
   sampleRate: number = 24000,
@@ -46,7 +41,7 @@ async function decodeRawPCMToAudioBuffer(
   for (let channel = 0; channel < numChannels; channel++) {
     const channelData = buffer.getChannelData(channel);
     for (let i = 0; i < frameCount; i++) {
-      // Convert 16-bit PCM to float normalized [-1, 1]
+      // Convert 16-bit PCM to float normalized between -1 and 1
       channelData[i] = dataInt16[i * numChannels + channel] / 32768.0;
     }
   }
@@ -66,14 +61,14 @@ const TTSController: React.FC<TTSControllerProps> = ({
   const currentSourceRef = useRef<AudioBufferSourceNode | null>(null);
   const isPlayingRef = useRef(false);
 
-  // Requirement: Voice ID CwhRBWXzGAHq8TQ4Fs17
-  const VOICE_ID = 'CwhRBWXzGAHq8TQ4Fs17'; 
+  const VOICE_NAME = 'kore'; 
 
+  // Create a flat playlist for the narration engine
   const playlist = useMemo(() => {
     const list: ReadingItem[] = [];
     sections.forEach((section) => {
       section.subsections.forEach((sub) => {
-        // We push both title and content to create a natural reading flow
+        // Queue Title then Content for natural Videoke flow
         list.push({ id: sub.id, label: sub.title, text: sub.title });
         list.push({ id: sub.id, label: sub.title, text: sub.content });
       });
@@ -96,7 +91,7 @@ const TTSController: React.FC<TTSControllerProps> = ({
       try {
         currentSourceRef.current.stop();
       } catch (e) {
-        // Already stopped or error
+        // Already stopped
       }
       currentSourceRef.current = null;
     }
@@ -115,9 +110,9 @@ const TTSController: React.FC<TTSControllerProps> = ({
 
     const item = playlist[index];
     
-    // Requirement: SMART STOP LOGIC - Stop if text contains "Craft"
+    // SMART STOP LOGIC: Automatically terminate if section contains "Craft"
     if (item.label.toLowerCase().includes('craft')) {
-      console.log("KingdomKids Logic: Stopping at Crafts section.");
+      console.info("Smart Stop: Detected 'Craft' section. Terminating narration.");
       stop();
       return;
     }
@@ -133,8 +128,7 @@ const TTSController: React.FC<TTSControllerProps> = ({
     onActiveIdChange?.(item.id);
 
     try {
-      // Use Gemini TTS via the service
-      const base64Audio = await generateTTS(sanitizedText, VOICE_ID);
+      const base64Audio = await generateTTS(sanitizedText, VOICE_NAME);
       
       if (!base64Audio || !isPlayingRef.current) {
         setIsLoading(false);
@@ -144,9 +138,7 @@ const TTSController: React.FC<TTSControllerProps> = ({
 
       const ctx = await initAudioContext();
       const rawBytes = decodeBase64(base64Audio);
-
-      // Manual PCM Decoding as required by instructions
-      const audioBuffer = await decodeRawPCMToAudioBuffer(rawBytes, ctx, 24000, 1);
+      const audioBuffer = await decodeRawPCM(rawBytes, ctx, 24000, 1);
       
       const source = ctx.createBufferSource();
       source.buffer = audioBuffer;
@@ -155,7 +147,7 @@ const TTSController: React.FC<TTSControllerProps> = ({
       
       setIsLoading(false);
 
-      // Requirement: Videoke Guide - Scroll active card to center
+      // VIDEOKE AUTO-SCROLL: Keep focused item in the center
       const element = document.getElementById(item.id);
       if (element) {
         element.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -168,9 +160,9 @@ const TTSController: React.FC<TTSControllerProps> = ({
       };
       source.start();
     } catch (error) {
-      console.error("Narrator System Error:", error);
+      console.error("Narrator Error:", error);
       setIsLoading(false);
-      // Skip error and try next
+      // Attempt to continue to next part after a delay
       if (isPlayingRef.current) setTimeout(() => playSegment(index + 1), 1000);
     }
   }, [playlist, stop, onActiveIdChange, initAudioContext]);
@@ -196,14 +188,14 @@ const TTSController: React.FC<TTSControllerProps> = ({
       {isPlaying && (
         <div className="bg-white/95 backdrop-blur-md px-5 py-3 rounded-2xl shadow-2xl border border-pink-100 flex items-center gap-4 animate-in slide-in-from-left duration-500">
           <div className="flex gap-1.5 items-end h-4">
-            <div className="w-1.5 bg-pink-500 rounded-full animate-bounce [animation-duration:0.6s]"></div>
+            <div className="w-1.5 bg-[#EF4E92] rounded-full animate-bounce [animation-duration:0.6s]"></div>
             <div className="w-1.5 bg-pink-400 rounded-full animate-bounce [animation-duration:0.6s] [animation-delay:0.1s]"></div>
             <div className="w-1.5 bg-pink-300 rounded-full animate-bounce [animation-duration:0.6s] [animation-delay:0.2s]"></div>
           </div>
           <div className="flex flex-col">
             <span className="text-[9px] font-black uppercase tracking-[0.2em] text-[#EF4E92]">Narrator Active</span>
             <span className="text-xs font-bold text-slate-800 uppercase truncate max-w-[150px]">
-              {isLoading ? 'Architecting...' : 'Reading Lesson'}
+              {isLoading ? 'Processing Voice...' : 'Reading Lesson'}
             </span>
           </div>
         </div>
