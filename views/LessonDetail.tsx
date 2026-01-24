@@ -5,6 +5,7 @@ import { Lesson, Profile } from '../types.ts';
 import ActivityCard from '../components/ActivityCard.tsx';
 import VideoEmbed from '../components/VideoEmbed.tsx';
 import LessonTextTab, { parseContent } from '../components/LessonTextTab.tsx';
+import TTSController from '../components/TTSController.tsx';
 
 interface LessonDetailProps {
   lessonId: string;
@@ -102,6 +103,9 @@ const LessonDetail: React.FC<LessonDetailProps> = ({ lessonId, user, onBack }) =
 
   return (
     <div className="min-h-screen bg-white pb-24 lg:pb-0">
+      {/* TTS AUDIO CONTROLLER */}
+      <TTSController sections={sections} />
+
       {/* PREVIEW MODAL */}
       {previewUrl && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 md:p-10 bg-black/80 backdrop-blur-sm animate-in fade-in duration-300">
