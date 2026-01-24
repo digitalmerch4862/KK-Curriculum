@@ -17,12 +17,11 @@ const TTSController: React.FC<TTSControllerProps> = ({ sections }) => {
   const synth = window.speechSynthesis;
   
   const isPlayingRef = useRef(false);
-  const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
   const observerRef = useRef<IntersectionObserver | null>(null);
   const activeSectionIdRef = useRef<string | null>(null);
   const isAutoScrollingRef = useRef(false);
 
-  // 1. Intersection Observer para ma-track ang visible section
+  // 1. Intersection Observer para malaman kung ano ang nasa screen
   useEffect(() => {
     observerRef.current = new IntersectionObserver(
       (entries) => {
@@ -77,14 +76,16 @@ const TTSController: React.FC<TTSControllerProps> = ({ sections }) => {
 
     setCurrentIndex(index);
 
-    // AUTO-SCROLL: Sasabay ang screen sa binabasa
+    // FIX: Mas accurate na auto-scroll logic
     const isNewSection = index === 0 || playlist[index - 1].id !== item.id;
     if (isNewSection) {
       const element = document.getElementById(item.id);
       if (element) {
         isAutoScrollingRef.current = true;
+        // Ginamit ang 'center' para laging nasa gitna ang binabasa
         element.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        // Reset flag after animation
+        
+        // Timeout para i-reset ang flag pagkatapos ng scroll animation
         setTimeout(() => { isAutoScrollingRef.current = false; }, 1000);
       }
     }
@@ -92,37 +93,34 @@ const TTSController: React.FC<TTSControllerProps> = ({ sections }) => {
     const utterance = new SpeechSynthesisUtterance(cleanText);
     utterance.rate = 0.95;
 
+    // Tuloy-tuloy na pagbabasa (Recursive Playlist Logic)
     utterance.onend = () => {
       if (isPlayingRef.current) {
-        setTimeout(() => playSegment(index + 1), 500);
+        setTimeout(() => playSegment(index + 1), 400); // Mas mabilis na transition
       }
     };
 
     synth.speak(utterance);
   }, [playlist, stop, synth]);
 
-  // 2. MANUAL SCROLL LOGIC: Titigil ang audio pag ginalaw ng user ang screen
-  const handleUserScroll = useCallback(() => {
+  // 2. Manual Scroll Detection: Titigil ang audio kapag ginalaw ng user ang screen
+  const handleUserInteraction = useCallback(() => {
     if (!isPlayingRef.current || isAutoScrollingRef.current) return;
 
-    // Instant stop pag naramdaman ang manual scroll
+    // Kapag naramdaman ang manual scroll o touch, stop agad
     synth.cancel();
     setIsPlaying(false); 
     isPlayingRef.current = false; 
-
-    // Opsyonal: Kung gusto mong mag-auto resume paghinto ng scroll, 
-    // gamitin ang debounce timer dito. Pero base sa request mo, 
-    // manual trigger ang kailangan para mag-start uli.
   }, [synth]);
 
   useEffect(() => {
-    window.addEventListener('wheel', handleUserScroll, { passive: true });
-    window.addEventListener('touchmove', handleUserScroll, { passive: true });
+    window.addEventListener('wheel', handleUserInteraction, { passive: true });
+    window.addEventListener('touchstart', handleUserInteraction, { passive: true });
     return () => {
-      window.removeEventListener('wheel', handleUserScroll);
-      window.removeEventListener('touchmove', handleUserScroll);
+      window.removeEventListener('wheel', handleUserInteraction);
+      window.removeEventListener('touchstart', handleUserInteraction);
     };
-  }, [handleUserScroll]);
+  }, [handleUserInteraction]);
 
   const handleToggle = () => {
     if (isPlaying) {
@@ -132,7 +130,7 @@ const TTSController: React.FC<TTSControllerProps> = ({ sections }) => {
       setIsPlaying(true);
       synth.cancel();
       
-      // Magsisimula sa kung ano ang nakikita sa screen
+      // Magsisimula sa kung ano ang kasalukuyang nasa gitna ng screen
       const startIndex = playlist.findIndex(item => item.id === activeSectionIdRef.current);
       playSegment(startIndex !== -1 ? startIndex : 0);
     }
@@ -141,8 +139,9 @@ const TTSController: React.FC<TTSControllerProps> = ({ sections }) => {
   return (
     <div className="fixed bottom-24 lg:bottom-10 left-6 z-[70] flex flex-col items-start gap-4">
       {isPlaying && (
-        <div className="bg-white/95 backdrop-blur-md px-4 py-2 rounded-xl shadow-xl border border-pink-100 animate-pulse">
-          <span className="text-[10px] font-black text-[#EF4E92] uppercase">Reading Mode Active</span>
+        <div className="bg-white/95 backdrop-blur-md px-4 py-2 rounded-xl shadow-xl border border-pink-100 flex items-center gap-2">
+          <div className="w-2 h-2 bg-[#EF4E92] rounded-full animate-ping"></div>
+          <span className="text-[10px] font-black text-[#EF4E92] uppercase">Reading...</span>
         </div>
       )}
       <button
