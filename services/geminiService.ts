@@ -1,12 +1,21 @@
-import { GoogleGenAI, Type, Modality, HarmCategory, HarmBlockThreshold } from "@google/genai";
+
+import { GoogleGenAI, Type, Modality } from "@google/genai";
 
 /**
  * Service for generating Sunday School lesson content and audio using Gemini.
  */
 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+// Helper to get a fresh AI instance with the current environment key
+const getAi = () => {
+  const apiKey = process.env.API_KEY;
+  if (!apiKey) {
+    throw new Error("Gemini API Key is missing. Please add API_KEY to your environment variables.");
+  }
+  return new GoogleGenAI({ apiKey });
+};
 
 export const generateLessonSummary = async (content: string) => {
+  const ai = getAi();
   const response = await ai.models.generateContent({
     model: 'gemini-3-flash-preview',
     contents: `Summarize the following lesson content into 2-3 engaging sentences for teachers. Content: ${content}`,
@@ -25,6 +34,7 @@ export const categorizeLessonTitle = async (title: string) => {
     "REVELATION"
   ];
   
+  const ai = getAi();
   const response = await ai.models.generateContent({
     model: 'gemini-3-flash-preview',
     contents: `Given the Sunday School lesson title "${title}", which of these biblical categories does it best fit into? 
@@ -57,6 +67,7 @@ export const generateFullLesson = async (goal: string, existingContext: string) 
     - engage: Array of objects { title, content }
   `;
 
+  const ai = getAi();
   const response = await ai.models.generateContent({
     model: 'gemini-3-pro-preview',
     contents: prompt,
@@ -85,6 +96,7 @@ export const generateFullLesson = async (goal: string, existingContext: string) 
 };
 
 export const generateDiscussionQuestions = async (content: string, gradeRange: string) => {
+  const ai = getAi();
   const response = await ai.models.generateContent({
     model: 'gemini-3-flash-preview',
     contents: `Generate 5 age-appropriate discussion questions for children in grades ${gradeRange} based on this lesson content: ${content}`,
@@ -93,6 +105,7 @@ export const generateDiscussionQuestions = async (content: string, gradeRange: s
 };
 
 export const generateActivitiesDraft = async (content: string, gradeRange: string) => {
+  const ai = getAi();
   const response = await ai.models.generateContent({
     model: 'gemini-3-pro-preview',
     contents: `Create 2 creative hands-on activities based on this lesson for children in grades ${gradeRange}. Return as a JSON list.`,
@@ -124,64 +137,49 @@ export const generateActivitiesDraft = async (content: string, gradeRange: strin
 
 /**
  * Sanitizes text for TTS to prevent API rejection errors.
- * Common issues: special characters, unicode, very short text, non-speech content.
  */
 function sanitizeForTTS(text: string): string | null {
   if (!text || typeof text !== 'string') return null;
-  
   let cleaned = text.trim();
+  if (cleaned.length < 5) return null;
   
-  // Minimum length check
-  if (cleaned.length < 10) return null;
-  
-  // Replace unicode characters that TTS doesn't like
   cleaned = cleaned
-    .replace(/[\u2018\u2019]/g, "'") // Smart single quotes
-    .replace(/[\u201C\u201D]/g, '"') // Smart double quotes
-    .replace(/[\u2013\u2014]/g, '-') // Em/en dashes
-    .replace(/[\u2026]/g, '...') // Ellipsis
-    .replace(/[^\x00-\x7F]/g, '') // Remove non-ASCII
-    .replace(/[^\w\s.,!?;:'\-()&]/g, ' ') // Keep only safe punctuation
-    .replace(/\s+/g, ' ') // Normalize whitespace
+    .replace(/[\u2018\u2019]/g, "'")
+    .replace(/[\u201C\u201D]/g, '"')
+    .replace(/[\u2013\u2014]/g, '-')
+    .replace(/[\u2026]/g, '...')
+    .replace(/[^\x00-\x7F]/g, '')
+    .replace(/[^\w\s.,!?;:'\-()&]/g, ' ')
+    .replace(/\s+/g, ' ')
     .trim();
   
-  // Final length check
-  if (cleaned.length < 10) return null;
-  
-  // Add terminal punctuation if missing
-  if (!/[.!?]$/.test(cleaned)) {
-    cleaned += '.';
-  }
-  
+  if (cleaned.length < 5) return null;
+  if (!/[.!?]$/.test(cleaned)) cleaned += '.';
   return cleaned;
 }
 
 /**
  * Generates audio bytes from text using the Gemini TTS model.
- * Includes robust input validation to prevent API errors.
  */
-export const generateTTS = async (text: string, voiceName: string = 'kore') => {
-  // Validate and sanitize input
+export const generateTTS = async (text: string, voiceName: string = 'Kore') => {
   const sanitized = sanitizeForTTS(text);
-  
-  if (!sanitized) {
-    console.warn('TTS: Text too short or invalid after sanitization');
-    return null;
-  }
+  if (!sanitized) return null;
   
   try {
+    const ai = getAi();
+    // Use proper voice casing from documentation (e.g., 'Kore', 'Puck')
+    const formattedVoiceName = voiceName.charAt(0).toUpperCase() + voiceName.slice(1).toLowerCase();
+    
     const response = await ai.models.generateContent({
       model: "gemini-2.5-flash-preview-tts",
-      contents: [{ parts: [{ text: sanitized }] }],
+      contents: [{ parts: [{ text: `Please speak this clearly for a children's lesson: ${sanitized}` }] }],
       config: {
         responseModalities: [Modality.AUDIO],
         speechConfig: {
           voiceConfig: {
-            prebuiltVoiceConfig: { voiceName: voiceName.toLowerCase() },
+            prebuiltVoiceConfig: { voiceName: formattedVoiceName },
           },
         },
-        // Remove safetySettings entirely - TTS model doesn't support them
-        // The model will use default safety settings automatically
       },
     });
 
@@ -189,6 +187,6 @@ export const generateTTS = async (text: string, voiceName: string = 'kore') => {
     return base64Audio || null;
   } catch (error) {
     console.error('TTS Generation Error:', error);
-    throw error; // Re-throw so caller can handle
+    return null;
   }
 };
