@@ -11,9 +11,13 @@ const handleSupabaseError = (error: any, context: string) => {
 export const db = {
   lessons: {
     async list(role: UserRole) {
+      // Joining with lesson_videos to get thumbnails for the dashboard
       let query = supabase
         .from('lessons')
-        .select('*')
+        .select(`
+          *,
+          videos:lesson_videos(*)
+        `)
         .order('created_at', { ascending: false });
 
       if (role === UserRole.TEACHER) {
