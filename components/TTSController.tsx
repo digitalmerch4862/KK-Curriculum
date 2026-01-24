@@ -4,6 +4,7 @@ import { Section } from './LessonTextTab.tsx';
 interface TTSControllerProps {
   sections: Section[];
   onActiveIdChange?: (id: string | null) => void;
+  onPlayingStatusChange?: (isPlaying: boolean) => void;
 }
 
 interface ReadingItem {
@@ -12,57 +13,58 @@ interface ReadingItem {
   text: string;
 }
 
-const TTSController: React.FC<TTSControllerProps> = ({ sections, onActiveIdChange }) => {
+const TTSController: React.FC<TTSControllerProps> = ({ 
+  sections, 
+  onActiveIdChange,
+  onPlayingStatusChange 
+}) => {
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentIndex, setCurrentIndex] = useState(-1);
   const synth = window.speechSynthesis;
   
-  // Refs to manage internal state across async synthesis cycles without re-renders
   const isPlayingRef = useRef(false);
   const heartbeatRef = useRef<number | null>(null);
 
-  // 1. Flatten the lesson hierarchy into a linear reading queue
+  // ✅ CRITICAL FIX: Combine title and content into ONE playlist item
   const playlist = useMemo(() => {
     const list: ReadingItem[] = [];
     sections.forEach((section) => {
       section.subsections.forEach((sub) => {
-        // We push Title and Content separately for better pacing
-        list.push({ id: sub.id, label: sub.title, text: sub.title });
-        list.push({ id: sub.id, label: sub.title, text: sub.content });
+        // Combine title and content with natural pause
+        const fullText = `${sub.title}. ${sub.content}`;
+        list.push({ 
+          id: sub.id, 
+          label: sub.title, 
+          text: fullText 
+        });
       });
     });
+    console.log('📋 Generated Playlist:', list.map(i => ({ id: i.id, label: i.label })));
     return list;
   }, [sections]);
 
-  /**
-   * Cleans markdown and ensures natural pacing
-   */
   const sanitize = (text: string) => {
     return text
-      .replace(/[#*_~`>]/g, '') // Strip markdown characters
-      .replace(/\[(.*?)\]\(.*?\)/g, '$1') // Keep link labels, remove URLs
-      .replace(/\n+/g, '. ') // Newlines become natural pauses
+      .replace(/[#*_~`>]/g, '')
+      .replace(/\[(.*?)\]\(.*?\)/g, '$1')
+      .replace(/\n+/g, '. ')
       .trim();
   };
 
-  /**
-   * Resets the synthesis engine and UI state
-   */
   const stop = useCallback(() => {
+    console.log('⏹️ Stopping playback');
     synth.cancel();
     isPlayingRef.current = false;
     setIsPlaying(false);
+    onPlayingStatusChange?.(false);
     setCurrentIndex(-1);
     if (onActiveIdChange) onActiveIdChange(null);
     if (heartbeatRef.current) {
       clearInterval(heartbeatRef.current);
       heartbeatRef.current = null;
     }
-  }, [synth, onActiveIdChange]);
+  }, [synth, onActiveIdChange, onPlayingStatusChange]);
 
-  /**
-   * Primary recursive playback engine - continuous and scroll-independent
-   */
   const playSegment = useCallback((index: number) => {
     if (index >= playlist.length || !isPlayingRef.current) {
       stop();
@@ -72,47 +74,63 @@ const TTSController: React.FC<TTSControllerProps> = ({ sections, onActiveIdChang
     const item = playlist[index];
     const cleanText = sanitize(item.text);
 
-    // Skip empty segments or those with no readable content
     if (!cleanText) {
+      console.warn(`⚠️ Empty text for segment ${index}, skipping...`);
       playSegment(index + 1);
       return;
     }
 
-    setCurrentIndex(index);
-    if (onActiveIdChange) onActiveIdChange(item.id);
-
-    // Auto-Scroll Logic: Center the active card in the viewport
-    const isNewSection = index === 0 || playlist[index - 1].id !== item.id;
-    if (isNewSection) {
-      const element = document.getElementById(item.id);
-      if (element) {
-        element.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      }
-    }
+    console.log(`▶️ Playing segment ${index}/${playlist.length - 1}:`, { 
+      id: item.id, 
+      label: item.label,
+      textPreview: cleanText.substring(0, 50) + '...'
+    });
 
     const utterance = new SpeechSynthesisUtterance(cleanText);
-    
-    // Voice Config (Prioritize English or Regional voices)
     const voices = synth.getVoices();
     const voice = voices.find(v => v.lang.includes('en-US')) || 
                   voices.find(v => v.lang.includes('en')) || 
                   voices[0];
     
     if (voice) utterance.voice = voice;
-    utterance.rate = 0.95; // Slightly slower for clear instruction
+    utterance.rate = 0.9;
     utterance.pitch = 1.0;
 
-    // Trigger the next segment immediately upon finishing the current one
+    // ✅ CRITICAL: Update highlight and scroll IMMEDIATELY when speech starts
+    utterance.onstart = () => {
+      console.log(`✅ Speech started for: ${item.id}`);
+      
+      // Update state FIRST
+      setCurrentIndex(index);
+      onActiveIdChange?.(item.id);
+
+      // Then scroll with better timing
+      requestAnimationFrame(() => {
+        const element = document.getElementById(item.id);
+        
+        if (element) {
+          console.log(`📍 Scrolling to element: ${item.id} - FOUND`);
+          element.scrollIntoView({ 
+            behavior: 'smooth', 
+            block: 'center',
+            inline: 'nearest'
+          });
+        } else {
+          console.error(`❌ Element NOT FOUND: ${item.id}`);
+        }
+      });
+    };
+
     utterance.onend = () => {
+      console.log(`✓ Finished segment ${index}`);
       if (isPlayingRef.current) {
-        // Natural 600ms transition delay
-        setTimeout(() => playSegment(index + 1), 600);
+        setTimeout(() => playSegment(index + 1), 300);
       }
     };
 
     utterance.onerror = (e) => {
+      console.error(`❌ TTS Error on segment ${index}:`, e.error);
       if (e.error !== 'interrupted') {
-        console.error('KingdomKids TTS Error:', e);
         stop();
       }
     };
@@ -124,13 +142,13 @@ const TTSController: React.FC<TTSControllerProps> = ({ sections, onActiveIdChang
     if (isPlaying) {
       stop();
     } else {
+      console.log('🎬 Starting playback...');
       isPlayingRef.current = true;
       setIsPlaying(true);
-      
-      // Reset any hung utterances
+      onPlayingStatusChange?.(true);
       synth.cancel();
 
-      // Mobile Stability Heartbeat: pause/resume pulse prevents process sleep
+      // Heartbeat to prevent browser from pausing long speeches
       heartbeatRef.current = window.setInterval(() => {
         if (synth.speaking && !synth.paused) {
           synth.pause();
@@ -142,16 +160,17 @@ const TTSController: React.FC<TTSControllerProps> = ({ sections, onActiveIdChang
     }
   };
 
-  // Cleanup synthesis on component unmount
   useEffect(() => {
-    return () => stop();
+    return () => {
+      console.log('🧹 Cleaning up TTS controller');
+      stop();
+    };
   }, [stop]);
 
   const currentItem = playlist[currentIndex];
 
   return (
     <div className="fixed bottom-24 lg:bottom-10 left-6 z-[70] flex flex-col items-start gap-4">
-      {/* Dynamic Reading Status Indicator */}
       {isPlaying && currentItem && (
         <div className="bg-white/95 backdrop-blur-md px-5 py-3 rounded-2xl shadow-2xl border border-pink-100 flex items-center gap-4 animate-in slide-in-from-left duration-300">
           <div className="relative">
@@ -159,7 +178,7 @@ const TTSController: React.FC<TTSControllerProps> = ({ sections, onActiveIdChang
             <div className="w-2.5 h-2.5 bg-[#EF4E92] rounded-full relative"></div>
           </div>
           <div className="flex flex-col">
-            <span className="text-[9px] font-black uppercase tracking-[0.2em] text-gray-400">Lesson Assistant</span>
+            <span className="text-[9px] font-black uppercase tracking-[0.2em] text-gray-400">Assistant Reading</span>
             <span className="text-xs font-black text-[#003882] uppercase truncate max-w-[150px]">
               {currentItem.label}
             </span>
@@ -167,13 +186,11 @@ const TTSController: React.FC<TTSControllerProps> = ({ sections, onActiveIdChang
         </div>
       )}
 
-      {/* Persistent Control Button */}
       <button
         onClick={handleToggle}
         className={`group relative w-16 h-16 rounded-full shadow-2xl flex items-center justify-center transition-all transform hover:scale-110 active:scale-95 border-4 border-white ${
           isPlaying ? 'bg-red-500 shadow-red-200' : 'bg-[#EF4E92] shadow-pink-200'
         }`}
-        aria-label={isPlaying ? "Stop Assistant" : "Play Assistant"}
       >
         {isPlaying ? (
           <svg className="w-6 h-6 text-white" fill="currentColor" viewBox="0 0 24 24">
@@ -184,11 +201,6 @@ const TTSController: React.FC<TTSControllerProps> = ({ sections, onActiveIdChang
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
           </svg>
         )}
-        
-        {/* Tooltip */}
-        <span className="absolute -top-10 left-0 bg-gray-900 text-white text-[10px] font-black uppercase tracking-widest px-4 py-2 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap shadow-xl">
-          {isPlaying ? 'Stop Audio' : 'Start Reading'}
-        </span>
       </button>
     </div>
   );
