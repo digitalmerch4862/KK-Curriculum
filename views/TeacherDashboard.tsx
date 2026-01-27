@@ -1,10 +1,9 @@
-
 import React, { useState, useEffect, useMemo } from 'react';
-import { db, DatabaseError } from '../services/supabaseService.ts';
-import { Lesson, UserRole, Profile, LessonContentStructure, LessonOccurrence, PlannerConfig } from '../types.ts';
+import { db } from '../services/supabaseService.ts';
+import { Lesson, UserRole, Profile, LessonContentStructure, LessonVideo, Attachment } from '../types.ts';
 import { 
-  X, ArrowLeft, ChevronRight, Download, BookOpen, GraduationCap, Users, 
-  Calendar, LogOut, Clock, Database, RefreshCw, Zap, AlertTriangle, ShieldCheck
+  X, ArrowLeft, ChevronRight, Menu, Download, FileText, Play, Eye, Search, BookOpen, GraduationCap, Users, CheckCircle2,
+  LayoutGrid, Book, History, Music, ScrollText, Cross, Send, Globe, LogOut, Video
 } from 'lucide-react';
 import TTSController from '../components/TTSController.tsx';
 
@@ -14,63 +13,152 @@ interface TeacherDashboardProps {
 }
 
 const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) => {
-  const [nextOccurrence, setNextOccurrence] = useState<LessonOccurrence | null>(null);
+  const [lessons, setLessons] = useState<Lesson[]>([]);
   const [selectedLesson, setSelectedLesson] = useState<Lesson | null>(null);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [categoryFilter, setCategoryFilter] = useState('ALL MISSIONS');
   const [loading, setLoading] = useState(true);
+  
+  const [isNavExpanded, setIsNavExpanded] = useState(false);
+  const [activeVideo, setActiveVideo] = useState<LessonVideo | null>(null);
+  const [viewingResource, setViewingResource] = useState<Attachment | null>(null);
+
+  // Videoke Mode State
   const [activeReadingId, setActiveReadingId] = useState<string | null>(null);
   const [isTTSPlaying, setIsTTSPlaying] = useState(false);
-  const [error, setError] = useState<{message: string, isSchema: boolean} | null>(null);
 
   useEffect(() => {
-    fetchNextMission();
+    fetchLessons();
   }, []);
 
-  const fetchNextMission = async () => {
+  const fetchLessons = async () => {
     setLoading(true);
-    setError(null);
     try {
-      const occ = await db.plannerOccurrences.getNextForTeacher('HISTORY');
-      setNextOccurrence(occ);
-    } catch (e: any) { 
-      setError({ 
-        message: e.message, 
-        isSchema: (e as DatabaseError).isSchemaError || false 
-      });
+      const data = await db.lessons.list(UserRole.TEACHER);
+      setLessons(data);
+    } catch (e) { 
+      console.error("Error fetching data", e); 
     } finally { 
       setLoading(false); 
     }
   };
 
-  const handleViewLesson = async () => {
-    if (!nextOccurrence?.lesson_id) return;
+  const getVideoThumbnail = (videos?: LessonVideo[]) => {
+    if (!videos || videos.length === 0) return null;
+    const url = videos[0].url;
+    try {
+      const urlObj = new URL(url);
+      if (urlObj.hostname.includes('youtube.com') || urlObj.hostname.includes('youtu.be')) {
+        const videoId = urlObj.searchParams.get('v') || urlObj.pathname.split('/').pop();
+        return `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`;
+      }
+      if (urlObj.hostname.includes('vimeo.com')) {
+        return `https://vumbnail.com/${url.split('/').pop()}.jpg`;
+      }
+    } catch (e) {
+      return null;
+    }
+    return null;
+  };
+
+  const handleViewLesson = async (id: string) => {
     setLoading(true);
     try {
-      const full = await db.lessons.get(nextOccurrence.lesson_id);
+      const full = await db.lessons.get(id);
       setSelectedLesson(full);
+      setIsNavExpanded(false);
       window.scrollTo({ top: 0, behavior: 'smooth' });
-    } catch (e: any) { 
-      alert("Error loading mission details."); 
+    } catch (e) { 
+      alert("Error loading lesson details."); 
     } finally { 
       setLoading(false); 
+    }
+  };
+
+  const scrollToSection = (id: string) => {
+    const element = document.getElementById(id);
+    if (element) {
+      const offset = 80;
+      const elementPosition = element.getBoundingClientRect().top + window.pageYOffset;
+      window.scrollTo({ top: elementPosition - offset, behavior: 'smooth' });
+      setIsNavExpanded(false);
     }
   };
 
   const parseMarkdownToStructure = (md: string): LessonContentStructure => {
     const newStructure: LessonContentStructure = { read: [], teach: [], engage: [] };
     if (!md) return newStructure;
+    
     const mainSections = md.split(/^# \d\. /m);
-    ['read', 'teach', 'engage'].forEach((key, i) => {
+    const pillars = ['read', 'teach', 'engage'] as const;
+    pillars.forEach((key, i) => {
       const fullBlock = mainSections[i + 1] || '';
       const parts = fullBlock.split(/^## /m);
-      newStructure[key as keyof LessonContentStructure] = parts.slice(1).filter(s => s.trim()).map((s, idx) => {
+      newStructure[key] = parts.slice(1).filter(s => s.trim()).map((s, idx) => {
         const lines = s.split('\n');
-        return { id: `${key}-sub-${idx}`, title: lines[0].trim(), content: lines.slice(1).join('\n').trim() };
+        return {
+          id: `${key}-sub-${idx}`,
+          title: lines[0].trim(),
+          content: lines.slice(1).join('\n').trim()
+        };
       });
     });
     return newStructure;
   };
 
+  const getDriveFileId = (url: string) => {
+    if (!url) return null;
+    const match = url.match(/\/d\/([^\/]+)/) || url.match(/id=([^&]+)/);
+    return match ? match[1] : null;
+  };
+
+  const getViewableUrl = (url: string) => {
+    if (!url) return '';
+    const fileId = getDriveFileId(url);
+    if (fileId && url.includes('drive.google.com')) {
+      return `https://drive.google.com/file/d/${fileId}/preview`;
+    }
+    return url;
+  };
+
+  const getDownloadUrl = (url: string) => {
+    if (!url) return '';
+    const fileId = getDriveFileId(url);
+    if (fileId && url.includes('drive.google.com')) {
+      return `https://drive.google.com/uc?export=download&id=${fileId}`;
+    }
+    return url;
+  };
+
+  const handleDownload = (e: React.MouseEvent, url: string, filename: string) => {
+    e.stopPropagation();
+    const downloadUrl = getDownloadUrl(url);
+    window.open(downloadUrl, '_blank');
+  };
+
+  const handlePreviewOpen = (e: React.MouseEvent, att: Attachment) => {
+    e.stopPropagation();
+    setViewingResource(att);
+  };
+
+  const filteredLessons = lessons.filter(l => 
+    l.title.toLowerCase().includes(searchTerm.toLowerCase()) && 
+    (categoryFilter === 'ALL MISSIONS' || l.category === categoryFilter)
+  );
+
+  const categories = [
+    { name: 'ALL MISSIONS', icon: <LayoutGrid size={16} /> },
+    { name: 'PENTATEUCH', icon: <Book size={16} /> },
+    { name: 'HISTORY', icon: <History size={16} /> },
+    { name: 'POETRY', icon: <Music size={16} /> },
+    { name: 'THE PROPHETS', icon: <ScrollText size={16} /> },
+    { name: 'THE GOSPELS', icon: <Cross size={16} /> },
+    { name: 'ACTS & EPISTLES', icon: <Send size={16} /> },
+    { name: 'REVELATION', icon: <Globe size={16} /> }
+  ];
+
   const lessonStructure = selectedLesson ? parseMarkdownToStructure(selectedLesson.content || '') : null;
+
   const ttsSections = useMemo(() => {
     if (!lessonStructure) return [];
     return [
@@ -80,148 +168,325 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
     ];
   }, [lessonStructure]);
 
-  if (error?.isSchema) {
-    return (
-      <div className="min-h-screen bg-[#F8FAFC] flex flex-col items-center justify-center p-6 text-center">
-        <div className="bg-white rounded-[64px] p-12 md:p-20 shadow-2xl border border-gray-100 max-w-2xl space-y-8 animate-in zoom-in-95 duration-500">
-          <div className="w-24 h-24 bg-amber-50 text-amber-500 rounded-full flex items-center justify-center mx-auto shadow-lg">
-            <Database size={48} />
-          </div>
-          <div className="space-y-4">
-            <h1 className="text-4xl font-black text-[#003882] tracking-tighter uppercase leading-none">Connection Required</h1>
-            <p className="text-slate-500 text-lg font-medium leading-relaxed">
-              The Mission Timeline is ready in the database, but the API gateway hasn't refreshed its connection yet.
-            </p>
-          </div>
-          <div className="bg-slate-50 p-8 rounded-[40px] border border-slate-100 text-left space-y-6">
-            <div className="flex items-center gap-3 text-[#EF4E92]">
-              <ShieldCheck size={20} />
-              <h4 className="font-black text-[11px] uppercase tracking-widest">Administrator Action</h4>
-            </div>
-            <p className="text-xs text-slate-600 font-bold leading-relaxed">
-              1. Go to your <span className="text-[#003882]">Supabase Dashboard</span>.<br/>
-              2. Navigate to <span className="text-[#003882]">Settings -> API</span>.<br/>
-              3. Scroll to the bottom and click the <span className="bg-[#EF4E92] text-white px-2 py-1 rounded text-[10px]">SAVE</span> button.<br/>
-              4. This reboots the API service and clears the schema cache.
-            </p>
-          </div>
-          <div className="flex flex-col gap-4">
-            <button 
-              onClick={fetchNextMission}
-              className="w-full bg-[#003882] text-white py-6 rounded-full font-black uppercase tracking-widest shadow-xl hover:bg-[#003882]/90 transition-all flex items-center justify-center gap-3 active:scale-95"
-            >
-              <RefreshCw size={20} className={loading ? 'animate-spin' : ''} /> 
-              {loading ? 'RE-SYNCING...' : 'RE-TRY CONNECTION'}
-            </button>
-            <button onClick={onLogout} className="text-slate-400 font-black uppercase tracking-widest text-[10px] hover:text-black transition-colors">Log Out & Exit</button>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="min-h-screen bg-[#F4F7FA] text-slate-900 font-sans selection:bg-pink-100 flex flex-col overflow-x-hidden">
-      {selectedLesson && <TTSController sections={ttsSections} onActiveIdChange={setActiveReadingId} onPlayingStatusChange={setIsTTSPlaying} />}
+      
+      {/* --- VIDEOKE CONTROL --- */}
+      {selectedLesson && (
+        <TTSController 
+          sections={ttsSections}
+          onActiveIdChange={setActiveReadingId}
+          onPlayingStatusChange={setIsTTSPlaying}
+        />
+      )}
 
-      {!selectedLesson && (
-        <header className="bg-white border-b border-slate-100 sticky top-0 z-50">
-          <div className="max-w-4xl mx-auto px-6 py-6 flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <div className="bg-[#EF4E92] w-12 h-12 rounded-2xl flex items-center justify-center font-black text-white shadow-xl">K</div>
-              <div className="hidden sm:block">
-                <span className="font-black text-2xl tracking-tighter text-[#003882] uppercase block leading-none">Faith Pathway</span>
-                <span className="text-[10px] font-black text-slate-300 uppercase tracking-widest mt-1">Teacher Dashboard</span>
+      {/* --- RESOURCE PREVIEW MODAL --- */}
+      {viewingResource && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-slate-900/95 backdrop-blur-md p-0 sm:p-6 overflow-hidden">
+          <div className="bg-white w-full h-full sm:max-w-6xl sm:h-[90vh] sm:rounded-[40px] overflow-hidden flex flex-col shadow-2xl animate-in zoom-in-95 duration-300">
+            <div className="px-4 py-4 sm:px-8 sm:py-6 border-b flex items-center justify-between bg-white sticky top-0 z-[210]">
+              <div className="flex items-center gap-3 min-w-0">
+                <FileText className="text-[#EF4E92] shrink-0" size={24} />
+                <h3 className="font-black text-sm sm:text-xl truncate text-[#003882]">{viewingResource.name}</h3>
+              </div>
+              <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+                <button 
+                  type="button"
+                  onClick={(e) => handleDownload(e, viewingResource.storage_path, viewingResource.name)} 
+                  className="bg-[#003882] text-white p-2.5 sm:px-6 sm:py-3 rounded-xl sm:rounded-full text-[10px] font-black uppercase tracking-widest flex items-center gap-2 hover:bg-[#002b66] active:scale-95 transition-all shadow-lg"
+                >
+                  <Download size={16} /> <span className="hidden sm:inline">Download</span>
+                </button>
+                <button 
+                  type="button"
+                  onClick={() => setViewingResource(null)} 
+                  className="p-2 sm:p-3 hover:bg-slate-100 rounded-xl transition-colors text-slate-400 hover:text-slate-900 active:scale-90"
+                >
+                  <X size={24} strokeWidth={3} />
+                </button>
               </div>
             </div>
-            <button onClick={onLogout} className="text-[10px] font-black uppercase text-slate-400 hover:text-red-500 tracking-widest flex items-center gap-2 p-2 px-4 rounded-xl transition-all border border-slate-50 hover:bg-slate-50 shadow-sm"><LogOut size={16} /> LOGOUT</button>
+            <div className="flex-1 w-full bg-slate-50 relative overflow-hidden">
+              <iframe 
+                src={getViewableUrl(viewingResource.storage_path)} 
+                className="w-full h-full border-none bg-white touch-auto" 
+                title="Resource Preview" 
+                allow="autoplay"
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* --- MAIN HEADER (Only visible when not viewing a lesson) --- */}
+      {!selectedLesson && (
+        <header className="bg-white border-b border-slate-100 sticky top-0 z-50">
+          <div className="max-w-[1440px] mx-auto px-6 py-4 flex items-center justify-between gap-6">
+            <div className="flex items-center gap-3 shrink-0">
+              <div className="bg-[#EF4E92] w-10 h-10 rounded-xl flex items-center justify-center font-black text-white shadow-lg">K</div>
+              <div className="hidden sm:block">
+                <span className="font-black text-xl tracking-tighter text-[#003882] uppercase block leading-none">Mission Control</span>
+                <span className="text-[8px] font-black text-slate-300 uppercase tracking-widest mt-1">Faith Pathway</span>
+              </div>
+            </div>
+
+            <div className="flex-1 max-w-xl relative">
+              <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300" size={18} />
+              <input 
+                type="text" 
+                placeholder="Find a mission..." 
+                className="w-full pl-12 pr-6 py-3 bg-slate-50 border border-transparent rounded-2xl text-sm outline-none focus:bg-white focus:ring-2 focus:ring-[#EF4E92] transition-all shadow-inner"
+                value={searchTerm}
+                onChange={e => setSearchTerm(e.target.value)}
+              />
+            </div>
+
+            <button onClick={onLogout} className="shrink-0 text-[10px] font-black uppercase text-slate-400 hover:text-red-500 tracking-widest flex items-center gap-2 p-2 sm:px-4 sm:py-2 rounded-xl transition-all">
+              <LogOut size={16} /> <span className="hidden md:inline">LOGOUT</span>
+            </button>
+          </div>
+
+          {/* Category Chip Bar */}
+          <div className="max-w-[1440px] mx-auto px-6 pb-4 overflow-x-auto scrollbar-hide flex items-center gap-3">
+            {categories.map((cat) => (
+              <button
+                key={cat.name}
+                onClick={() => setCategoryFilter(cat.name)}
+                className={`whitespace-nowrap flex items-center gap-2 px-5 py-2.5 rounded-full transition-all font-black text-[10px] uppercase tracking-widest border ${
+                  categoryFilter === cat.name 
+                  ? 'bg-[#003882] text-white border-[#003882] shadow-lg' 
+                  : 'bg-white text-slate-400 border-slate-100 hover:border-slate-300'
+                }`}
+              >
+                <span className={categoryFilter === cat.name ? 'text-[#EF4E92]' : 'text-slate-300'}>{cat.icon}</span>
+                {cat.name}
+              </button>
+            ))}
           </div>
         </header>
       )}
 
+      {/* --- MAIN CONTENT AREA --- */}
       <main className="flex-1 min-w-0">
         {!selectedLesson ? (
-          <div className="max-w-4xl mx-auto p-6 md:p-10 animate-in fade-in duration-700">
-            <div className="mb-12 space-y-4">
-              <div className="flex items-center gap-3">
-                <div className="bg-emerald-500 w-2.5 h-2.5 rounded-full animate-pulse shadow-[0_0_10px_rgba(16,185,129,0.5)]"></div>
-                <span className="text-[11px] font-black uppercase tracking-[0.2em] text-emerald-600">Dynamic Mission Path</span>
-              </div>
-              <h1 className="text-4xl sm:text-7xl font-black text-[#003882] tracking-tighter uppercase leading-none">Current Objective</h1>
-              <p className="text-slate-400 font-medium text-lg sm:text-xl max-w-2xl leading-relaxed">Your assigned lesson updates automatically based on the mission frequency rule.</p>
+          <div className="max-w-[1440px] mx-auto p-6 sm:p-10 animate-in fade-in duration-700">
+            <div className="flex flex-col mb-10">
+              <h1 className="text-3xl sm:text-4xl md:text-5xl font-black text-[#003882] tracking-tighter uppercase mb-2">
+                {categoryFilter}
+              </h1>
+              <p className="text-slate-400 font-medium text-sm sm:text-base">Equip yourself with biblical truth for the next generation.</p>
             </div>
 
-            {loading ? (
-              <div className="h-96 bg-white/50 rounded-[64px] animate-pulse flex items-center justify-center font-black text-slate-300 uppercase tracking-widest">
-                Syncing Timeline...
-              </div>
-            ) : nextOccurrence ? (
-              <div 
-                onClick={handleViewLesson}
-                className="group bg-white rounded-[64px] p-10 md:p-16 border-2 border-white shadow-2xl hover:shadow-[#EF4E92]/10 hover:scale-[1.01] transition-all cursor-pointer relative overflow-hidden"
-              >
-                <div className="absolute top-0 right-0 p-8">
-                  <div className="bg-blue-50 text-[#003882] px-4 py-2 rounded-2xl flex items-center gap-3 font-black text-[10px] uppercase tracking-widest">
-                    <Clock size={14} /> {new Date(nextOccurrence.scheduled_date).toLocaleDateString('default', { day: 'numeric', month: 'short', year: 'numeric' })}
-                  </div>
-                </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 sm:gap-8">
+              {loading ? (
+                Array(8).fill(0).map((_, i) => <div key={i} className="bg-white/50 h-80 rounded-[48px] animate-pulse"></div>)
+              ) : (
+                filteredLessons.map(lesson => {
+                  const thumb = getVideoThumbnail(lesson.videos);
+                  const catIcon = categories.find(c => c.name === lesson.category)?.icon || <Video size={32} />;
 
-                <div className="space-y-8">
-                  <div className="flex items-center gap-4">
-                    <span className="bg-[#EF4E92] text-white px-5 py-2 rounded-full text-[10px] font-black uppercase tracking-widest shadow-lg">{nextOccurrence.category}</span>
-                    <div className="flex items-center gap-2 text-slate-400 font-black text-[11px] uppercase tracking-widest">
-                      <Zap size={14} className="text-amber-400 fill-amber-400" /> ACTIVE SLOT
+                  return (
+                    <div 
+                      key={lesson.id} 
+                      onClick={() => handleViewLesson(lesson.id)} 
+                      className="group bg-white rounded-[40px] border border-slate-50 shadow-sm hover:shadow-2xl hover:scale-[1.02] transition-all cursor-pointer flex flex-col overflow-hidden min-h-[420px] sm:min-h-[460px]"
+                    >
+                      {/* Thumbnail Stage */}
+                      <div className="h-44 sm:h-52 relative overflow-hidden bg-slate-100">
+                        {thumb ? (
+                          <img 
+                            src={thumb} 
+                            alt={lesson.title} 
+                            className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" 
+                          />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-[#003882] to-[#EF4E92]/20 text-white/20">
+                            {React.cloneElement(catIcon as React.ReactElement<any>, { size: 64, strokeWidth: 1 })}
+                          </div>
+                        )}
+                        <div className="absolute inset-0 bg-gradient-to-t from-slate-900/60 to-transparent opacity-0 sm:group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                          <div className="w-14 h-14 sm:w-16 sm:h-16 bg-white/20 backdrop-blur-md rounded-full flex items-center justify-center text-white">
+                            <Play fill="currentColor" size={24} />
+                          </div>
+                        </div>
+                        <span className="absolute top-4 left-4 bg-[#EF4E92] text-white px-3 py-1 rounded-full text-[8px] font-black uppercase tracking-widest shadow-lg">
+                          {lesson.category}
+                        </span>
+                      </div>
+
+                      {/* Info Stage */}
+                      <div className="p-6 sm:p-8 flex flex-col flex-1">
+                        <h2 className="text-lg sm:text-xl font-black text-[#003882] mb-3 group-hover:text-[#EF4E92] leading-tight line-clamp-2">
+                          {lesson.title}
+                        </h2>
+                        <p className="text-slate-500 text-xs sm:text-sm line-clamp-3 leading-relaxed mb-auto italic">
+                          {lesson.summary}
+                        </p>
+                        <div className="pt-5 mt-5 border-t border-slate-50 flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <span className="text-[9px] font-black text-slate-300 uppercase tracking-widest">Grd {lesson.grade_min}-{lesson.grade_max}</span>
+                            {lesson.videos && lesson.videos.length > 0 && (
+                              <div className="flex items-center gap-1 bg-blue-50 text-[#003882] px-2 py-0.5 rounded-full text-[8px] font-black uppercase">
+                                <Video size={10} /> Video
+                              </div>
+                            )}
+                          </div>
+                          <ChevronRight className="text-slate-200 group-hover:text-[#EF4E92] group-hover:translate-x-1 transition-all" size={20} />
+                        </div>
+                      </div>
                     </div>
-                  </div>
-
-                  <h2 className="text-4xl md:text-7xl font-black text-[#003882] tracking-tighter leading-[1.1] transition-colors group-hover:text-[#EF4E92]">
-                    {nextOccurrence.lesson?.title || 'Untitled Mission'}
-                  </h2>
-                  <p className="text-slate-500 text-xl md:text-2xl leading-relaxed font-medium italic opacity-80 line-clamp-3">
-                    "{nextOccurrence.lesson?.summary || 'No briefing available.'}"
-                  </p>
-
-                  <div className="pt-10 flex items-center gap-4 text-[11px] font-black uppercase tracking-widest text-[#003882]">
-                    <div className="w-12 h-12 bg-[#003882] text-white rounded-full flex items-center justify-center group-hover:bg-[#EF4E92] transition-colors shadow-xl">
-                      <ChevronRight size={24} strokeWidth={3} />
-                    </div>
-                    Open Briefing
-                  </div>
+                  );
+                })
+              )}
+              {!loading && filteredLessons.length === 0 && (
+                <div className="col-span-full h-80 flex flex-col items-center justify-center bg-white/50 rounded-[48px] border-2 border-dashed border-slate-200 p-6 text-center">
+                  <p className="font-black uppercase tracking-widest text-slate-400 text-[10px]">No lessons found in this mission sector.</p>
                 </div>
-              </div>
-            ) : (
-              <div className="h-[400px] flex flex-col items-center justify-center bg-white rounded-[64px] border-4 border-dashed border-slate-100 p-12 text-center space-y-8 shadow-inner">
-                <div className="w-24 h-24 bg-slate-50 rounded-full flex items-center justify-center text-slate-200"><Calendar size={48} /></div>
-                <div>
-                  <p className="font-black uppercase tracking-[0.4em] text-[#003882] text-sm">Awaiting Deployment</p>
-                  <p className="text-slate-300 font-medium mt-4 text-lg">No lesson has been assigned to the current mission cycle.<br/>Contact the administrator to assign a lesson to the current slot.</p>
-                </div>
-              </div>
-            )}
+              )}
+            </div>
           </div>
         ) : (
-          <div className="max-w-4xl mx-auto px-6 py-10 md:py-20 animate-in fade-in slide-in-from-bottom-6 duration-700">
-             <button onClick={() => setSelectedLesson(null)} className="flex items-center gap-3 text-[10px] font-black uppercase tracking-widest text-slate-400 hover:text-black mb-12"><ArrowLeft size={16} strokeWidth={3} /> Return Dashboard</button>
-             <h1 className="text-5xl md:text-8xl font-black text-[#003882] tracking-tighter leading-none mb-10">{selectedLesson.title}</h1>
-             <p className="text-2xl md:text-3xl text-slate-400 font-medium italic leading-relaxed mb-24 opacity-80">"{selectedLesson.summary}"</p>
-             <div className="space-y-32">
-                {['read', 'teach', 'engage'].map((key, i) => (
-                  <section key={key} className="space-y-12">
-                     <div className="flex items-center gap-4">
-                        <div className={`p-4 rounded-3xl text-white shadow-xl ${i===0?'bg-blue-600':i===1?'bg-emerald-500':'bg-pink-500'}`}>{i===0?<BookOpen size={24}/>:i===1?<GraduationCap size={24}/>:<Users size={24}/>}</div>
-                        <h3 className="text-4xl font-black tracking-tighter uppercase text-[#003882]">{i+1}. {key}</h3>
-                     </div>
-                     <div className="space-y-8">
-                        {lessonStructure && (lessonStructure as any)[key].map((section: any) => (
-                          <div key={section.id} id={section.id} className={`bg-white rounded-[48px] p-10 md:p-16 border-t-[16px] transition-all duration-500 shadow-sm ${activeReadingId === section.id ? 'ring-8 ring-pink-50 border-t-[#EF4E92] scale-[1.02] shadow-2xl' : 'border-t-slate-50'}`}>
-                            <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-300 mb-8">{section.title}</h4>
-                            <p className="text-slate-700 text-2xl md:text-3xl leading-relaxed font-medium whitespace-pre-wrap">{section.content}</p>
-                          </div>
-                        ))}
-                     </div>
-                  </section>
+          /* --- SELECTED LESSON VIEW --- */
+          <div className="max-w-4xl mx-auto px-5 sm:px-6 py-10 sm:py-20 animate-in fade-in slide-in-from-bottom-6 duration-700">
+            {/* Floating Navigation Map */}
+            {lessonStructure && (
+              <div className="fixed bottom-6 right-6 z-[70] flex flex-col items-end gap-3 pointer-events-none">
+                <div className={`
+                  flex flex-col gap-2 mb-2 transition-all duration-300 origin-bottom-right max-h-[50vh] overflow-y-auto pr-1 scrollbar-hide pointer-events-auto
+                  ${isNavExpanded ? 'scale-100 opacity-100' : 'scale-0 opacity-0'}
+                `}>
+                  <button onClick={() => setSelectedLesson(null)} className="bg-slate-900 text-white px-5 sm:px-6 py-3 rounded-2xl text-[9px] sm:text-[10px] font-black uppercase tracking-widest shadow-xl flex items-center gap-2 self-end">
+                    <ArrowLeft size={14} /> Exit Mission
+                  </button>
+                  <div className="w-px h-4 bg-slate-200 self-end mr-6"></div>
+                  {lessonStructure.read.map(item => (
+                    <button key={item.id} onClick={() => scrollToSection(item.id)} className="bg-[#2563eb] text-white px-4 sm:px-5 py-2.5 sm:py-3 rounded-xl sm:rounded-2xl text-[9px] sm:text-[10px] font-black uppercase tracking-widest shadow-lg text-right hover:scale-105 transition-all">{item.title}</button>
+                  ))}
+                  {lessonStructure.teach.map(item => (
+                    <button key={item.id} onClick={() => scrollToSection(item.id)} className="bg-[#10b981] text-white px-4 sm:px-5 py-2.5 sm:py-3 rounded-xl sm:rounded-2xl text-[9px] sm:text-[10px] font-black uppercase tracking-widest shadow-lg text-right hover:scale-105 transition-all">{item.title}</button>
+                  ))}
+                  {lessonStructure.engage.map(item => (
+                    <button key={item.id} onClick={() => scrollToSection(item.id)} className="bg-[#EF4E92] text-white px-4 sm:px-5 py-2.5 sm:py-3 rounded-xl sm:rounded-2xl text-[9px] sm:text-[10px] font-black uppercase tracking-widest shadow-lg text-right hover:scale-105 transition-all">{item.title}</button>
+                  ))}
+                </div>
+                <button 
+                  onClick={() => setIsNavExpanded(!isNavExpanded)} 
+                  className={`w-14 h-14 sm:w-16 sm:h-16 rounded-full flex items-center justify-center shadow-2xl transition-all duration-500 pointer-events-auto ${isNavExpanded ? 'bg-slate-900 text-white rotate-90' : 'bg-[#EF4E92] text-white'}`}
+                >
+                  {isNavExpanded ? <X size={24} strokeWidth={3} /> : <Menu size={24} strokeWidth={3} />}
+                </button>
+              </div>
+            )}
+
+            <div className="mb-12 sm:mb-20">
+              <div className="flex items-center gap-3 mb-6 sm:mb-8">
+                <button onClick={() => setSelectedLesson(null)} className="p-2.5 sm:p-3 bg-white rounded-xl sm:rounded-2xl shadow-sm border border-slate-100 hover:bg-slate-50 transition-all active:scale-95">
+                  <ArrowLeft size={20} />
+                </button>
+                <span className="bg-[#EF4E92] text-white px-4 py-1.5 rounded-full text-[9px] sm:text-[10px] font-black uppercase tracking-widest shadow-md inline-block">{selectedLesson.category}</span>
+              </div>
+              <h1 className="text-3xl sm:text-5xl md:text-7xl font-black text-[#003882] tracking-tighter mt-4 leading-[1.1] mb-6">{selectedLesson.title}</h1>
+              <p className="text-lg sm:text-xl md:text-2xl text-slate-400 font-medium italic leading-relaxed">"{selectedLesson.summary}"</p>
+            </div>
+
+            <div className="space-y-24 sm:space-y-32">
+              {[
+                { id: 'read-anchor', key: 'read', color: '#2563eb', label: '1. READ', icon: <BookOpen size={24} /> },
+                { id: 'teach-anchor', key: 'teach', color: '#10b981', label: '2. TEACH', icon: <GraduationCap size={24} /> },
+                { id: 'engage-anchor', key: 'engage', color: '#EF4E92', label: '3. ENGAGE', icon: <Users size={24} /> }
+              ].map((pillar) => (
+                <section key={pillar.key} id={pillar.id} className="scroll-mt-24">
+                  <div className="flex items-center gap-4 mb-8 sm:mb-12">
+                    <div className="p-2.5 sm:p-3 rounded-xl sm:rounded-2xl text-white shadow-lg" style={{ backgroundColor: pillar.color }}>
+                      {React.cloneElement(pillar.icon as React.ReactElement<any>, { size: 20 })}
+                    </div>
+                    <h3 className="text-2xl sm:text-3xl md:text-4xl font-black tracking-tighter uppercase text-[#003882]">{pillar.label}</h3>
+                  </div>
+                  <div className="flex flex-col gap-6 sm:gap-10">
+                    {lessonStructure && (lessonStructure as any)[pillar.key].map((section: any) => (
+                      <div 
+                        key={section.id} 
+                        id={section.id}
+                        className={`bg-white rounded-[32px] sm:rounded-[40px] p-6 sm:p-8 md:p-12 shadow-sm border-t-[8px] sm:border-t-[12px] scroll-mt-28 transition-all duration-500 ${
+                          activeReadingId === section.id 
+                          ? 'scale-[1.01] ring-4 sm:ring-8 ring-pink-50 shadow-2xl border-t-[#EF4E92]' 
+                          : 'hover:shadow-xl'
+                        }`} 
+                        style={{ borderTopColor: activeReadingId === section.id ? '#EF4E92' : pillar.color }}
+                      >
+                        <div className="flex items-center justify-between mb-6 sm:mb-8">
+                          <h4 className="text-[9px] sm:text-[10px] font-black text-slate-300 uppercase tracking-widest">{section.title}</h4>
+                          <CheckCircle2 className={`transition-all ${activeReadingId === section.id ? 'text-[#EF4E92] scale-125' : 'text-slate-50'}`} size={20} />
+                        </div>
+                        <p className="text-slate-700 text-base sm:text-xl md:text-2xl leading-relaxed font-medium whitespace-pre-wrap">{section.content}</p>
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              ))}
+            </div>
+
+            {/* Media HUB */}
+            <section id="media-hub" className="mt-24 sm:mt-40 scroll-mt-24">
+              <div className="flex items-center gap-3 mb-8 sm:mb-12">
+                <div className="h-8 sm:h-10 w-1.5 sm:w-2 bg-slate-800 rounded-full"></div>
+                <h3 className="text-2xl sm:text-3xl font-black text-[#003882] uppercase tracking-tighter">Media Hub</h3>
+              </div>
+              <div className="flex flex-col gap-6 sm:gap-10">
+                {selectedLesson.videos?.map((vid, i) => (
+                  <div key={i} className="bg-slate-900 rounded-[32px] sm:rounded-[48px] overflow-hidden aspect-video shadow-2xl relative border-2 sm:border-4 border-white">
+                    {activeVideo?.url === vid.url ? (
+                      <iframe src={`https://www.youtube.com/embed/${vid.url.includes('v=') ? vid.url.split('v=')[1].split('&')[0] : vid.url.split('/').pop()}`} className="w-full h-full" allowFullScreen allow="autoplay" title={vid.title || 'Lesson Video'} />
+                    ) : (
+                      <div className="w-full h-full flex flex-col items-center justify-center p-6 sm:p-8 bg-slate-800 relative group">
+                        <button onClick={() => setActiveVideo(vid)} className="w-16 h-16 sm:w-24 sm:h-24 bg-white text-slate-900 rounded-full flex items-center justify-center sm:hover:scale-110 active:scale-95 transition-all shadow-2xl relative z-10">
+                          <Play fill="currentColor" size={24} className="sm:scale-125" />
+                        </button>
+                        <span className="text-white/60 font-black mt-6 sm:mt-8 uppercase text-[9px] sm:text-[11px] tracking-widest relative z-10">{vid.title || 'Play Lesson Media'}</span>
+                      </div>
+                    )}
+                  </div>
                 ))}
-             </div>
+              </div>
+            </section>
+
+            {/* Resources HUB */}
+            <section id="resource-hub" className="mt-24 sm:mt-40 scroll-mt-24 pb-40 sm:pb-80">
+              <div className="flex items-center gap-3 mb-8 sm:mb-12">
+                <div className="h-8 sm:h-10 w-1.5 sm:w-2 bg-[#003882] rounded-full"></div>
+                <h3 className="text-2xl sm:text-3xl font-black text-[#003882] uppercase tracking-tighter">Resources</h3>
+              </div>
+              <div className="grid grid-cols-1 gap-4 sm:gap-6">
+                {selectedLesson.attachments?.map((att, i) => (
+                  <div key={i} className="bg-white rounded-[24px] sm:rounded-[40px] p-4 sm:p-6 md:p-8 flex items-center justify-between border border-slate-100 shadow-sm sm:hover:shadow-xl transition-all group relative overflow-visible z-10">
+                    <div className="flex items-center gap-3 sm:gap-6 min-w-0 flex-1">
+                      <div className="min-w-0 flex-1">
+                        <h4 className="font-black text-slate-800 text-xs sm:text-base truncate pr-2" title={att.name}>{att.name}</h4>
+                        <p className="text-[8px] sm:text-[9px] text-slate-400 font-bold uppercase tracking-widest mt-1">Ready to access</p>
+                      </div>
+                    </div>
+                    <div className="flex gap-2 sm:gap-3 shrink-0 ml-4 relative z-20">
+                      <button 
+                        type="button"
+                        onClick={(e) => handlePreviewOpen(e, att)}
+                        className="p-3 sm:p-4 bg-slate-50 text-[#EF4E92] rounded-xl sm:rounded-2xl sm:hover:bg-pink-50 transition-all active:scale-90 border border-pink-100 shadow-sm cursor-pointer"
+                        title="View in App"
+                      >
+                        <Eye size={20} />
+                      </button>
+                      <button 
+                        type="button"
+                        onClick={(e) => handleDownload(e, att.storage_path, att.name)} 
+                        className="p-3 sm:p-4 bg-blue-50 text-[#003882] rounded-xl sm:rounded-2xl sm:hover:bg-blue-100 transition-all active:scale-90 border border-blue-100 shadow-sm cursor-pointer"
+                        title="Download File"
+                      >
+                        <Download size={20} />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </section>
           </div>
         )}
       </main>

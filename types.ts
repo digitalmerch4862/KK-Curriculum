@@ -1,4 +1,5 @@
 
+
 export enum UserRole {
   ADMIN = 'admin',
   TEACHER = 'teacher'
@@ -8,8 +9,6 @@ export enum LessonStatus {
   DRAFT = 'draft',
   PUBLISHED = 'published'
 }
-
-export type FrequencyType = 'DAILY' | 'WEEKLY' | 'MONTHLY';
 
 export interface Profile {
   id: string;
@@ -34,7 +33,7 @@ export interface Lesson {
   id: string;
   title: string;
   summary: string;
-  content: string; 
+  content: string; // Stored as Markdown, parsed to Structure in UI
   category: string;
   series: string;
   grade_min: number;
@@ -44,30 +43,11 @@ export interface Lesson {
   published_at?: string;
   created_by: string;
   updated_at: string;
+  // Join fields
   activities?: LessonActivity[];
   videos?: LessonVideo[];
   attachments?: Attachment[];
   progress?: LessonProgress;
-}
-
-export interface PlannerConfig {
-  category: string;
-  start_date: string; // ISO Date
-  frequency: FrequencyType;
-  is_active: boolean;
-  updated_at: string;
-}
-
-export interface LessonOccurrence {
-  id: string;
-  category: string;
-  scheduled_date: string; // ISO Date (replaces scheduled_month for granularity)
-  lesson_id?: string;
-  status: 'SCHEDULED' | 'COMPLETED' | 'SKIPPED' | 'CANCELLED';
-  lesson?: {
-    title: string;
-    summary: string;
-  };
 }
 
 export interface LessonActivity {
