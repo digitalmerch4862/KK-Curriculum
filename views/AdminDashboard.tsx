@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { db } from '../services/supabaseService.ts';
 import { categorizeLessonTitle, generateFullLesson, generateLessonSummary } from '../services/geminiService.ts';
@@ -28,7 +29,7 @@ const SubSectionCard: React.FC<SubSectionCardProps> = ({
   const [bibleReference, setBibleReference] = useState('');
   const [isFetching, setIsFetching] = useState(false);
 
-  const isBibleCard = sub.title.toLowerCase().includes('bible text');
+  const isBibleCard = sub.title.toLowerCase().includes('bible text') || sub.title.toLowerCase().includes('scripture');
 
   const fetchBibleText = async () => {
     const sanitizedQuery = bibleReference.trim().replace(/–|—/g, '-');
@@ -134,17 +135,18 @@ const SubSectionCard: React.FC<SubSectionCardProps> = ({
 
 const DEFAULT_LESSON_TEMPLATE: LessonContentStructure = {
   read: [
-    { id: 'tpl-r1', title: 'Bible Text', content: '' },
-    { id: 'tpl-r2', title: 'Memory Verse', content: '' }
+    { id: 'tpl-r1', title: 'Scripture', content: '' },
+    { id: 'tpl-r2', title: 'Objective', content: '' },
+    { id: 'tpl-r3', title: 'The Hook', content: '' }
   ],
   teach: [
-    { id: 'tpl-t1', title: 'Big Picture', content: '' },
-    { id: 'tpl-t2', title: 'Teach the Story', content: '' },
-    { id: 'tpl-t3', title: 'Gospel Connection', content: '' }
+    { id: 'tpl-t1', title: 'Point 1', content: '' },
+    { id: 'tpl-t2', title: 'Point 2', content: '' },
+    { id: 'tpl-t3', title: 'Point 3', content: '' }
   ],
   engage: [
-    { id: 'tpl-e1', title: 'Discussion', content: '' },
-    { id: 'tpl-e2', title: 'Crafts', content: '' }
+    { id: 'tpl-e1', title: 'Group Activity', content: '' },
+    { id: 'tpl-e2', title: 'Closing Prayer', content: '' }
   ]
 };
 
@@ -346,16 +348,33 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
       const existingContext = lessons.map(l => l.title).join(', ');
       const result = await generateFullLesson(aiGoal, existingContext);
       if (result) {
-        const newGenStructure = {
-          read: result.read.map((r: any) => ({ id: Math.random().toString(36).substr(2, 9), title: r.title, content: r.content })),
-          teach: result.teach.map((t: any) => ({ id: Math.random().toString(36).substr(2, 9), title: t.title, content: t.content })),
-          engage: result.engage.map((e: any) => ({ id: Math.random().toString(36).substr(2, 9), title: e.title, content: e.content })),
+        // Map new AI Architect schema to existing UI 3-column structure
+        const newGenStructure: LessonContentStructure = {
+          read: [
+            { id: Math.random().toString(36).substr(2, 9), title: 'Scripture', content: result.scripture },
+            { id: Math.random().toString(36).substr(2, 9), title: 'Objective', content: result.objective },
+            { id: Math.random().toString(36).substr(2, 9), title: 'The Hook', content: result.the_hook }
+          ],
+          teach: result.the_lesson.map((point: string, i: number) => ({
+            id: Math.random().toString(36).substr(2, 9),
+            title: `Point ${i + 1}`,
+            content: point
+          })),
+          engage: [
+            { id: Math.random().toString(36).substr(2, 9), title: 'Group Activity', content: result.group_activity },
+            { id: Math.random().toString(36).substr(2, 9), title: 'Closing Prayer', content: result.closing_prayer }
+          ],
         };
-        setFormData(prev => ({ ...prev, title: result.title, summary: result.summary }));
+
+        // Combine objective and scripture for a smart initial summary
+        const autoSummary = `${result.objective} Base Scripture: ${result.scripture}`;
+        
+        setFormData(prev => ({ ...prev, title: result.title, summary: autoSummary }));
         setStructure(newGenStructure);
         setAiStep('preview');
       }
     } catch (e) {
+      console.error("AI Generation failed", e);
       alert("AI Generation failed. Please try again.");
     } finally {
       setIsGenerating(false);
