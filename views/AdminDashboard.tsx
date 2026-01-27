@@ -1,7 +1,10 @@
+
 import React, { useState, useEffect } from 'react';
-import { db } from '../services/supabaseService.ts';
+import { db, DatabaseError } from '../services/supabaseService.ts';
 import { categorizeLessonTitle, generateFullLesson, generateLessonSummary } from '../services/geminiService.ts';
 import { Lesson, LessonStatus, UserRole, Profile, LessonActivity, LessonVideo, Attachment, LessonContentStructure, LessonSubSection } from '../types.ts';
+import PlannerTab from './PlannerTab.tsx';
+import { AlertTriangle, Database, RefreshCw } from 'lucide-react';
 
 // Helper components defined outside of the main component
 
@@ -154,6 +157,7 @@ interface AdminDashboardProps {
 }
 
 const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
+  const [activeTab, setActiveTab] = useState<'LESSONS' | 'PLANNER'>('LESSONS');
   const [lessons, setLessons] = useState<Lesson[]>([]);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [formData, setFormData] = useState<Partial<Lesson>>({
@@ -182,7 +186,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
   const [loading, setLoading] = useState(false);
   const [isCategorizing, setIsCategorizing] = useState(false);
   const [isSummarizing, setIsSummarizing] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<{message: string, isSchema: boolean} | null>(null);
 
   const [isAiModalOpen, setIsAiModalOpen] = useState(false);
   const [aiStep, setAiStep] = useState<'questions' | 'preview'>('questions');
@@ -230,13 +234,18 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
   };
 
   const fetchLessons = async () => {
+    setLoading(true);
+    setError(null);
     try {
       const data = await db.lessons.list(UserRole.ADMIN);
       setLessons(data);
-      setError(null);
     } catch (e: any) {
-      console.error("Fetch lessons error:", e);
-      setError(`Failed to load lessons. Error: ${e.message}`);
+      setError({ 
+        message: e.message, 
+        isSchema: (e as DatabaseError).isSchemaError || false 
+      });
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -257,7 +266,10 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
         window.scrollTo({ top: 0, behavior: 'smooth' });
       }
     } catch (e: any) {
-      setError(`Error loading lesson: ${e.message}`);
+      setError({ 
+        message: e.message, 
+        isSchema: (e as DatabaseError).isSchemaError || false 
+      });
     }
   };
 
@@ -332,7 +344,10 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
       setEditingId(null);
       fetchLessons();
     } catch (e: any) {
-      setError(`Save failed: ${e.message}`);
+      setError({ 
+        message: e.message, 
+        isSchema: (e as DatabaseError).isSchemaError || false 
+      });
       alert("Save Failed: " + e.message);
     } finally {
       setLoading(false);
@@ -412,6 +427,43 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
     }));
   };
 
+  if (error?.isSchema) {
+    return (
+      <div className="min-h-screen bg-[#F8FAFC] flex flex-col items-center justify-center p-6 text-center">
+        <div className="bg-white rounded-[64px] p-12 md:p-20 shadow-2xl border border-gray-100 max-w-2xl space-y-8 animate-in zoom-in-95 duration-500">
+          <div className="w-24 h-24 bg-amber-50 text-amber-500 rounded-full flex items-center justify-center mx-auto shadow-lg">
+            <Database size={48} />
+          </div>
+          <div className="space-y-4">
+            <h1 className="text-4xl font-black text-[#003882] tracking-tighter uppercase">Setup Required</h1>
+            <p className="text-slate-500 text-lg font-medium leading-relaxed">
+              Your Supabase database is not yet configured for the Faith Pathway planner.
+              Please run the migration script to initialize the tables.
+            </p>
+          </div>
+          <div className="bg-slate-50 p-6 rounded-[32px] border border-slate-100 text-left space-y-4">
+            <h4 className="font-black text-[10px] uppercase tracking-widest text-[#EF4E92]">Action Items</h4>
+            <ol className="list-decimal list-inside text-sm text-slate-600 font-medium space-y-2">
+              <li>Open your Supabase Dashboard</li>
+              <li>Navigate to the <strong>SQL Editor</strong></li>
+              <li>Paste the contents of <code>planner_migration.sql</code></li>
+              <li>Click <strong>Run</strong></li>
+            </ol>
+          </div>
+          <div className="flex flex-col gap-3">
+            <button 
+              onClick={fetchLessons}
+              className="w-full bg-[#EF4E92] text-white py-5 rounded-full font-black uppercase tracking-widest shadow-xl hover:scale-[1.02] transition-transform flex items-center justify-center gap-2"
+            >
+              <RefreshCw size={20} /> I've Run the Script
+            </button>
+            <button onClick={onLogout} className="text-slate-400 font-black uppercase tracking-widest text-[10px] hover:text-black transition-colors">Log Out</button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-[#F8FAFC]">
       {/* AI GENERATOR MODAL */}
@@ -454,222 +506,249 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
             <p className="hidden md:block text-[10px] text-gray-400 font-bold tracking-widest uppercase">FAITH PATHWAY</p>
           </div>
         </div>
+
+        {/* Tab Switcher - Added here in the header to preserve layout */}
+        <div className="flex bg-gray-100 p-1 rounded-full">
+          <button 
+            onClick={() => setActiveTab('LESSONS')} 
+            className={`px-6 py-2 rounded-full text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === 'LESSONS' ? 'bg-white text-[#EF4E92] shadow-sm' : 'text-gray-400'}`}
+          >
+            Lessons
+          </button>
+          <button 
+            onClick={() => setActiveTab('PLANNER')} 
+            className={`px-6 py-2 rounded-full text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === 'PLANNER' ? 'bg-white text-[#EF4E92] shadow-sm' : 'text-gray-400'}`}
+          >
+            Planner
+          </button>
+        </div>
+
         <button onClick={onLogout} className="text-[10px] md:text-xs font-black uppercase text-[#EF4E92] tracking-widest hover:text-[#EF4E92]/80 transition-colors">Log out</button>
       </header>
 
-      <div className="max-w-[1600px] mx-auto p-6 md:p-8 grid grid-cols-1 lg:grid-cols-12 gap-6 md:gap-10">
-        <div className={`lg:col-span-3 space-y-6 ${editingId ? 'hidden lg:block' : 'block'}`}>
-          <div className="flex items-center justify-between">
-            <h2 className="font-black text-2xl md:text-3xl tracking-tighter text-[#003882]">Lessons</h2>
-            <button onClick={handleNew} className="bg-[#EF4E92] text-white px-5 py-2.5 rounded-full text-[9px] md:text-[10px] font-black uppercase tracking-widest shadow-xl hover:bg-[#EF4E92]/90 transition-all">+ NEW</button>
-          </div>
-          <div className="space-y-4 overflow-y-auto lg:max-h-[calc(100vh-220px)] pr-2 scrollbar-hide">
-            {lessons.map(l => (
-              <div key={l.id} onClick={() => handleEdit(l.id)} className={`p-4 md:p-5 rounded-[28px] border transition-all cursor-pointer relative flex flex-col ${editingId === l.id ? 'border-pink-500 bg-pink-50/30' : 'border-gray-50 bg-white hover:border-gray-200 shadow-sm'}`}>
-                <h3 className="font-bold text-sm line-clamp-1 text-gray-800 mb-1">{l.title || 'Untitled'}</h3>
-                {l.summary && (
-                  <p className="text-[10px] text-gray-500 line-clamp-2 italic mb-3 leading-relaxed">
-                    {l.summary}
-                  </p>
-                )}
-                <div className="flex items-center justify-between mt-auto">
-                  <p className="text-[9px] text-gray-400 font-bold uppercase tracking-widest">{l.category}</p>
-                  <span className={`text-[8px] font-black uppercase px-2 py-0.5 rounded-full ${l.status === LessonStatus.PUBLISHED ? 'bg-green-500 text-white' : 'bg-orange-500 text-white'}`}>{l.status}</span>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <div className={`lg:col-span-9 ${!editingId ? 'hidden lg:block' : 'block'}`}>
-          {!editingId ? (
-            <div className="h-[70vh] flex flex-col items-center justify-center bg-white rounded-[64px] border border-gray-100 text-gray-300 p-12 text-center shadow-sm">
-              <svg className="w-20 h-20 opacity-10 mb-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 6v6m0 0v6m0-6h6m-6 0H6" /></svg>
-              <p className="font-black uppercase tracking-[0.3em] text-[10px]">Select or Create a lesson</p>
+      {activeTab === 'PLANNER' ? (
+        <PlannerTab categories={categories} />
+      ) : (
+        <div className="max-w-[1600px] mx-auto p-6 md:p-8 grid grid-cols-1 lg:grid-cols-12 gap-6 md:gap-10">
+          <div className={`lg:col-span-3 space-y-6 ${editingId ? 'hidden lg:block' : 'block'}`}>
+            <div className="flex items-center justify-between">
+              <h2 className="font-black text-2xl md:text-3xl tracking-tighter text-[#003882]">Lessons</h2>
+              <button onClick={handleNew} className="bg-[#EF4E92] text-white px-5 py-2.5 rounded-full text-[9px] md:text-[10px] font-black uppercase tracking-widest shadow-xl hover:bg-[#EF4E92]/90 transition-all">+ NEW</button>
             </div>
-          ) : (
-            <div className="space-y-10 animate-in fade-in slide-in-from-bottom-6 duration-700 pb-20">
-              <div className="bg-white/95 backdrop-blur-md p-3 md:p-4 rounded-full border border-gray-100 shadow-xl flex flex-wrap items-center justify-between sticky top-[92px] z-40 gap-3">
-                <h2 className="font-black text-md md:text-xl px-4 text-[#003882] truncate max-w-[200px]">{formData.title || 'Draft Lesson'}</h2>
-                <div className="flex items-center gap-2">
-                  <button onClick={() => setEditingId(null)} className="px-4 py-2 text-[10px] font-black uppercase text-gray-400 hover:text-black tracking-widest">DISCARD</button>
-                  <button onClick={() => setIsAiModalOpen(true)} className="px-5 py-3 bg-[#EF4E92] rounded-full text-[10px] font-black uppercase tracking-widest text-white shadow-lg hover:scale-[1.02] transition-transform">AI ARCHITECT</button>
-                  <button onClick={() => handleSave(LessonStatus.DRAFT)} className="px-6 py-3 bg-[#003882] rounded-full text-[10px] font-black uppercase tracking-widest text-white shadow-lg transition-transform hover:scale-[1.02]">DRAFT</button>
-                  <button onClick={() => handleSave(LessonStatus.PUBLISHED)} className="px-8 py-3 bg-[#EF4E92] rounded-full text-[10px] font-black uppercase tracking-widest text-white shadow-lg transition-transform hover:scale-[1.02]">PUBLISH</button>
-                </div>
+            {loading && !lessons.length ? (
+              <div className="space-y-4">
+                {[1,2,3].map(i => <div key={i} className="h-24 bg-gray-100 rounded-[28px] animate-pulse" />)}
               </div>
+            ) : (
+              <div className="space-y-4 overflow-y-auto lg:max-h-[calc(100vh-220px)] pr-2 scrollbar-hide">
+                {lessons.map(l => (
+                  <div key={l.id} onClick={() => handleEdit(l.id)} className={`p-4 md:p-5 rounded-[28px] border transition-all cursor-pointer relative flex flex-col ${editingId === l.id ? 'border-pink-500 bg-pink-50/30' : 'border-gray-50 bg-white hover:border-gray-200 shadow-sm'}`}>
+                    <h3 className="font-bold text-sm line-clamp-1 text-gray-800 mb-1">{l.title || 'Untitled'}</h3>
+                    {l.summary && (
+                      <p className="text-[10px] text-gray-500 line-clamp-2 italic mb-3 leading-relaxed">
+                        {l.summary}
+                      </p>
+                    )}
+                    <div className="flex items-center justify-between mt-auto">
+                      <p className="text-[9px] text-gray-400 font-bold uppercase tracking-widest">{l.category}</p>
+                      <span className={`text-[8px] font-black uppercase px-2 py-0.5 rounded-full ${l.status === LessonStatus.PUBLISHED ? 'bg-green-500 text-white' : 'bg-orange-500 text-white'}`}>{l.status}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                <div className="space-y-3">
-                  <SectionHeader title="Mission Name" />
-                  <input placeholder="Mission Name..." className="w-full bg-white border border-gray-100 rounded-[28px] px-6 py-5 font-black text-xl text-gray-800 outline-none shadow-sm focus:border-pink-300 transition-all" value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})} />
+          <div className={`lg:col-span-9 ${!editingId ? 'hidden lg:block' : 'block'}`}>
+            {!editingId ? (
+              <div className="h-[70vh] flex flex-col items-center justify-center bg-white rounded-[64px] border border-gray-100 text-gray-300 p-12 text-center shadow-sm">
+                <svg className="w-20 h-20 opacity-10 mb-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 6v6m0 0v6m0-6h6m-6 0H6" /></svg>
+                <p className="font-black uppercase tracking-[0.3em] text-[10px]">Select or Create a lesson</p>
+              </div>
+            ) : (
+              <div className="space-y-10 animate-in fade-in slide-in-from-bottom-6 duration-700 pb-20">
+                <div className="bg-white/95 backdrop-blur-md p-3 md:p-4 rounded-full border border-gray-100 shadow-xl flex flex-wrap items-center justify-between sticky top-[92px] z-40 gap-3">
+                  <h2 className="font-black text-md md:text-xl px-4 text-[#003882] truncate max-w-[200px]">{formData.title || 'Draft Lesson'}</h2>
+                  <div className="flex items-center gap-2">
+                    <button onClick={() => setEditingId(null)} className="px-4 py-2 text-[10px] font-black uppercase text-gray-400 hover:text-black tracking-widest">DISCARD</button>
+                    <button onClick={() => setIsAiModalOpen(true)} className="px-5 py-3 bg-[#EF4E92] rounded-full text-[10px] font-black uppercase tracking-widest text-white shadow-lg hover:scale-[1.02] transition-transform">AI ARCHITECT</button>
+                    <button onClick={() => handleSave(LessonStatus.DRAFT)} className="px-6 py-3 bg-[#003882] rounded-full text-[10px] font-black uppercase tracking-widest text-white shadow-lg transition-transform hover:scale-[1.02]">DRAFT</button>
+                    <button onClick={() => handleSave(LessonStatus.PUBLISHED)} className="px-8 py-3 bg-[#EF4E92] rounded-full text-[10px] font-black uppercase tracking-widest text-white shadow-lg transition-transform hover:scale-[1.02]">PUBLISH</button>
+                  </div>
                 </div>
-                <div className="space-y-3">
-                  <SectionHeader title="Classification" />
-                  <div className="flex items-center gap-3">
-                    <div className="relative flex-1">
-                      <select
-                        className="w-full bg-white border border-gray-100 rounded-[28px] px-6 py-5 text-xs font-black appearance-none outline-none shadow-sm focus:border-pink-300 transition-all cursor-pointer"
-                        value={formData.category}
-                        onChange={e => setFormData({...formData, category: e.target.value})}
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                  <div className="space-y-3">
+                    <SectionHeader title="Mission Name" />
+                    <input placeholder="Mission Name..." className="w-full bg-white border border-gray-100 rounded-[28px] px-6 py-5 font-black text-xl text-gray-800 outline-none shadow-sm focus:border-pink-300 transition-all" value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})} />
+                  </div>
+                  <div className="space-y-3">
+                    <SectionHeader title="Classification" />
+                    <div className="flex items-center gap-3">
+                      <div className="relative flex-1">
+                        <select
+                          className="w-full bg-white border border-gray-100 rounded-[28px] px-6 py-5 text-xs font-black appearance-none outline-none shadow-sm focus:border-pink-300 transition-all cursor-pointer"
+                          value={formData.category}
+                          onChange={e => setFormData({...formData, category: e.target.value})}
+                        >
+                          {categories.map(c => <option key={c} value={c}>{c}</option>)}
+                        </select>
+                      </div>
+                      <button
+                        onClick={handleAutoCategorize}
+                        disabled={isCategorizing}
+                        className="shrink-0 w-14 h-14 bg-white border border-gray-100 rounded-full flex items-center justify-center font-black text-[#EF4E92] shadow-sm hover:scale-110 active:scale-95 transition-all"
+                        title="AI Classification"
                       >
-                        {categories.map(c => <option key={c} value={c}>{c}</option>)}
-                      </select>
+                        {isCategorizing ? <div className="w-5 h-5 border-2 border-pink-500 border-t-transparent rounded-full animate-spin"></div> : "AI"}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* MISSION SUMMARY BLOCK */}
+                <div className="space-y-3">
+                  <SectionHeader title="Mission Briefing (Summary)" />
+                  <div className="flex flex-col md:flex-row gap-4">
+                    <div className="relative flex-1">
+                      <textarea 
+                        placeholder="Brief overview for the mission team..." 
+                        className="w-full bg-white border border-gray-100 rounded-[32px] px-8 py-6 font-medium text-sm text-gray-600 outline-none shadow-sm focus:border-pink-300 transition-all resize-none min-h-[120px] leading-relaxed italic" 
+                        value={formData.summary} 
+                        onChange={e => setFormData({...formData, summary: e.target.value})} 
+                      />
                     </div>
                     <button
-                      onClick={handleAutoCategorize}
-                      disabled={isCategorizing}
-                      className="shrink-0 w-14 h-14 bg-white border border-gray-100 rounded-full flex items-center justify-center font-black text-[#EF4E92] shadow-sm hover:scale-110 active:scale-95 transition-all"
-                      title="AI Classification"
+                      onClick={handleAutoSummarize}
+                      disabled={isSummarizing}
+                      className="shrink-0 md:w-16 h-16 md:h-auto bg-white border border-gray-100 rounded-[32px] flex flex-col items-center justify-center font-black text-[#EF4E92] shadow-sm hover:scale-105 active:scale-95 transition-all p-4 gap-2 border-dashed border-2"
+                      title="AI Mission Briefing"
                     >
-                      {isCategorizing ? <div className="w-5 h-5 border-2 border-pink-500 border-t-transparent rounded-full animate-spin"></div> : "AI"}
+                      {isSummarizing ? (
+                        <div className="w-5 h-5 border-2 border-pink-500 border-t-transparent rounded-full animate-spin"></div>
+                      ) : (
+                        <>
+                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                          </svg>
+                          <span className="text-[8px] uppercase tracking-widest hidden md:block">AI Brief</span>
+                        </>
+                      )}
                     </button>
                   </div>
                 </div>
-              </div>
 
-              {/* MISSION SUMMARY BLOCK */}
-              <div className="space-y-3">
-                <SectionHeader title="Mission Briefing (Summary)" />
-                <div className="flex flex-col md:flex-row gap-4">
-                  <div className="relative flex-1">
-                    <textarea 
-                      placeholder="Brief overview for the mission team..." 
-                      className="w-full bg-white border border-gray-100 rounded-[32px] px-8 py-6 font-medium text-sm text-gray-600 outline-none shadow-sm focus:border-pink-300 transition-all resize-none min-h-[120px] leading-relaxed italic" 
-                      value={formData.summary} 
-                      onChange={e => setFormData({...formData, summary: e.target.value})} 
-                    />
+                <div className="space-y-6">
+                  <SectionHeader title="Lesson Body" />
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6">
+                    {(['read', 'teach', 'engage'] as const).map((col) => (
+                      <div key={col} className="bg-gray-50/60 rounded-[48px] p-6 md:p-8 flex flex-col min-h-[500px] border border-gray-100/50">
+                        <div className="flex items-center justify-between mb-6 px-3">
+                          <h4 className="font-black text-[10px] md:text-xs text-[#003882] uppercase tracking-[0.2em]">{col}</h4>
+                          <button onClick={() => addSubSection(col)} className="text-gray-300 hover:text-[#EF4E92] transition-colors">
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M12 6v6m0 0v6m0-6h6m-6 0H6" /></svg>
+                          </button>
+                        </div>
+                        <div className="space-y-4">
+                          {structure[col].map(sub => (
+                            <SubSectionCard key={sub.id} sub={sub} onUpdate={updates => updateSubSection(col, sub.id, updates)} onDelete={() => deleteSubSection(col, sub.id)} placeholder={`Content for ${sub.title}...`} />
+                          ))}
+                        </div>
+                      </div>
+                    ))}
                   </div>
+                </div>
+
+                <div className="space-y-6">
+                  <SectionHeader title="Interactive Activities" />
                   <button
-                    onClick={handleAutoSummarize}
-                    disabled={isSummarizing}
-                    className="shrink-0 md:w-16 h-16 md:h-auto bg-white border border-gray-100 rounded-[32px] flex flex-col items-center justify-center font-black text-[#EF4E92] shadow-sm hover:scale-105 active:scale-95 transition-all p-4 gap-2 border-dashed border-2"
-                    title="AI Mission Briefing"
+                    onClick={() => setActivities([...activities, { title: '', instructions: '', supplies: [], duration_minutes: 15 }])}
+                    className="bg-[#EF4E92] text-white px-6 py-3 rounded-full text-[10px] font-black uppercase tracking-widest shadow-lg hover:bg-[#EF4E92]/90 transition-all flex items-center gap-2"
                   >
-                    {isSummarizing ? (
-                      <div className="w-5 h-5 border-2 border-pink-500 border-t-transparent rounded-full animate-spin"></div>
-                    ) : (
-                      <>
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M13 10V3L4 14h7v7l9-11h-7z" />
-                        </svg>
-                        <span className="text-[8px] uppercase tracking-widest hidden md:block">AI Brief</span>
-                      </>
-                    )}
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M12 9v6m3-3H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    ADD ACTIVITY
                   </button>
-                </div>
-              </div>
-
-              <div className="space-y-6">
-                <SectionHeader title="Lesson Body" />
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6">
-                  {(['read', 'teach', 'engage'] as const).map((col) => (
-                    <div key={col} className="bg-gray-50/60 rounded-[48px] p-6 md:p-8 flex flex-col min-h-[500px] border border-gray-100/50">
-                      <div className="flex items-center justify-between mb-6 px-3">
-                        <h4 className="font-black text-[10px] md:text-xs text-[#003882] uppercase tracking-[0.2em]">{col}</h4>
-                        <button onClick={() => addSubSection(col)} className="text-gray-300 hover:text-[#EF4E92] transition-colors">
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M12 6v6m0 0v6m0-6h6m-6 0H6" /></svg>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    {activities.map((act, idx) => (
+                      <div key={idx} className="bg-white border border-gray-100 rounded-[40px] p-8 shadow-sm space-y-4 relative">
+                        <button
+                          onClick={() => setActivities(activities.filter((_, i) => i !== idx))}
+                          className="absolute top-8 right-8 text-gray-300 hover:text-red-500 transition-colors"
+                          aria-label="Remove activity"
+                        >
+                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        </svg>
                         </button>
+                        <input placeholder="Activity Title" className="text-lg font-black w-full bg-gray-50 rounded-xl px-5 py-3 border-none outline-none" value={act.title} onChange={e => {
+                          const n = [...activities]; n[idx].title = e.target.value; setActivities(n);
+                        }} />
+                        <textarea placeholder="Step-by-step instructions..." className="w-full bg-gray-50 rounded-xl p-5 text-xs min-h-[120px] resize-none outline-none font-medium leading-relaxed" value={act.instructions} onChange={e => {
+                          const n = [...activities]; n[idx].instructions = e.target.value; setActivities(n);
+                        }} />
                       </div>
-                      <div className="space-y-4">
-                        {structure[col].map(sub => (
-                          <SubSectionCard key={sub.id} sub={sub} onUpdate={updates => updateSubSection(col, sub.id, updates)} onDelete={() => deleteSubSection(col, sub.id)} placeholder={`Content for ${sub.title}...`} />
-                        ))}
+                    ))}
+                  </div>
+                </div>
+
+                <div className="space-y-6">
+                  <SectionHeader title="Videos & Media" />
+                  <button onClick={() => setVideos([...videos, { title: '', url: '', provider: 'youtube' }])} className="bg-[#003882] text-white px-6 py-2.5 rounded-full text-[10px] font-black uppercase tracking-widest shadow-lg hover:bg-[#003882]/90 transition-all">+ ADD VIDEO</button>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    {videos.map((vid, idx) => (
+                      <div key={idx} className="bg-white border border-gray-100 rounded-[40px] p-8 shadow-sm space-y-4 relative">
+                        <button
+                          onClick={() => setVideos(videos.filter((_, i) => i !== idx))}
+                          className="absolute top-8 right-8 text-gray-300 hover:text-red-500 transition-colors"
+                          aria-label="Remove video"
+                        >
+                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          </svg>
+                        </button>
+                        <input placeholder="Video Title" className="text-xs font-bold w-full bg-gray-50 rounded-xl px-5 py-3 border-none outline-none" value={vid.title} onChange={e => {
+                          const n = [...videos]; n[idx].title = e.target.value; setVideos(n);
+                        }} />
+                        <input placeholder="YouTube or Vimeo URL" className="text-xs font-medium w-full bg-gray-50 rounded-xl px-5 py-3 border-none outline-none text-blue-600" value={vid.url} onChange={e => {
+                          const n = [...videos]; n[idx].url = e.target.value; setVideos(n);
+                        }} />
                       </div>
-                    </div>
-                  ))}
+                    ))}
+                  </div>
                 </div>
-              </div>
 
-              <div className="space-y-6">
-                <SectionHeader title="Interactive Activities" />
-                <button
-                  onClick={() => setActivities([...activities, { title: '', instructions: '', supplies: [], duration_minutes: 15 }])}
-                  className="bg-[#EF4E92] text-white px-6 py-3 rounded-full text-[10px] font-black uppercase tracking-widest shadow-lg hover:bg-[#EF4E92]/90 transition-all flex items-center gap-2"
-                >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M12 9v6m3-3H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                  ADD ACTIVITY
-                </button>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                  {activities.map((act, idx) => (
-                    <div key={idx} className="bg-white border border-gray-100 rounded-[40px] p-8 shadow-sm space-y-4 relative">
-                      <button
-                        onClick={() => setActivities(activities.filter((_, i) => i !== idx))}
-                        className="absolute top-8 right-8 text-gray-300 hover:text-red-500 transition-colors"
-                        aria-label="Remove activity"
-                      >
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                        </svg>
-                      </button>
-                      <input placeholder="Activity Title" className="text-lg font-black w-full bg-gray-50 rounded-xl px-5 py-3 border-none outline-none" value={act.title} onChange={e => {
-                        const n = [...activities]; n[idx].title = e.target.value; setActivities(n);
-                      }} />
-                      <textarea placeholder="Step-by-step instructions..." className="w-full bg-gray-50 rounded-xl p-5 text-xs min-h-[120px] resize-none outline-none font-medium leading-relaxed" value={act.instructions} onChange={e => {
-                        const n = [...activities]; n[idx].instructions = e.target.value; setActivities(n);
-                      }} />
-                    </div>
-                  ))}
+                <div className="space-y-6">
+                  <SectionHeader title="Resources & Downloads" />
+                  <button onClick={() => setAttachments([...attachments, { name: '', storage_path: '', type: 'pdf' }])} className="bg-[#EF4E92] text-white px-6 py-2.5 rounded-full text-[10px] font-black uppercase tracking-widest shadow-lg hover:bg-[#EF4E92]/90 transition-all">+ ADD RESOURCE</button>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    {attachments.map((att, idx) => (
+                      <div key={idx} className="bg-white border border-gray-100 rounded-[40px] p-8 shadow-sm space-y-4 relative">
+                        <button
+                          onClick={() => setAttachments(attachments.filter((_, i) => i !== idx))}
+                          className="absolute top-8 right-8 text-gray-300 hover:text-red-500 transition-colors"
+                          aria-label="Remove resource"
+                        >
+                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          </svg>
+                        </button>
+                        <input placeholder="Resource Name (e.g. Coloring Sheet)" className="text-xs font-bold w-full bg-gray-50 rounded-xl px-5 py-3 border-none outline-none" value={att.name || ''} onChange={e => {
+                          const n = [...attachments]; n[idx].name = e.target.value; setAttachments(n);
+                        }} />
+                        <input placeholder="URL to PDF/Image" className="text-xs font-medium w-full bg-gray-50 rounded-xl px-5 py-3 border-none outline-none text-blue-600" value={att.storage_path || ''} onChange={e => {
+                          const n = [...attachments]; n[idx].storage_path = e.target.value; setAttachments(n);
+                        }} />
+                      </div>
+                    ))}
+                  </div>
                 </div>
               </div>
-
-              <div className="space-y-6">
-                <SectionHeader title="Videos & Media" />
-                <button onClick={() => setVideos([...videos, { title: '', url: '', provider: 'youtube' }])} className="bg-[#003882] text-white px-6 py-2.5 rounded-full text-[10px] font-black uppercase tracking-widest shadow-lg hover:bg-[#003882]/90 transition-all">+ ADD VIDEO</button>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                  {videos.map((vid, idx) => (
-                    <div key={idx} className="bg-white border border-gray-100 rounded-[40px] p-8 shadow-sm space-y-4 relative">
-                      <button
-                        onClick={() => setVideos(videos.filter((_, i) => i !== idx))}
-                        className="absolute top-8 right-8 text-gray-300 hover:text-red-500 transition-colors"
-                        aria-label="Remove video"
-                      >
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                        </svg>
-                      </button>
-                      <input placeholder="Video Title" className="text-xs font-bold w-full bg-gray-50 rounded-xl px-5 py-3 border-none outline-none" value={vid.title} onChange={e => {
-                        const n = [...videos]; n[idx].title = e.target.value; setVideos(n);
-                      }} />
-                      <input placeholder="YouTube or Vimeo URL" className="text-xs font-medium w-full bg-gray-50 rounded-xl px-5 py-3 border-none outline-none text-blue-600" value={vid.url} onChange={e => {
-                        const n = [...videos]; n[idx].url = e.target.value; setVideos(n);
-                      }} />
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              <div className="space-y-6">
-                <SectionHeader title="Resources & Downloads" />
-                <button onClick={() => setAttachments([...attachments, { name: '', storage_path: '', type: 'pdf' }])} className="bg-[#EF4E92] text-white px-6 py-2.5 rounded-full text-[10px] font-black uppercase tracking-widest shadow-lg hover:bg-[#EF4E92]/90 transition-all">+ ADD RESOURCE</button>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                  {attachments.map((att, idx) => (
-                    <div key={idx} className="bg-white border border-gray-100 rounded-[40px] p-8 shadow-sm space-y-4 relative">
-                      <button
-                        onClick={() => setAttachments(attachments.filter((_, i) => i !== idx))}
-                        className="absolute top-8 right-8 text-gray-300 hover:text-red-500 transition-colors"
-                        aria-label="Remove resource"
-                      >
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                        </svg>
-                      </button>
-                      <input placeholder="Resource Name (e.g. Coloring Sheet)" className="text-xs font-bold w-full bg-gray-50 rounded-xl px-5 py-3 border-none outline-none" value={att.name || ''} onChange={e => {
-                        const n = [...attachments]; n[idx].name = e.target.value; setAttachments(n);
-                      }} />
-                      <input placeholder="URL to PDF/Image" className="text-xs font-medium w-full bg-gray-50 rounded-xl px-5 py-3 border-none outline-none text-blue-600" value={att.storage_path || ''} onChange={e => {
-                        const n = [...attachments]; n[idx].storage_path = e.target.value; setAttachments(n);
-                      }} />
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          )}
+            )}
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 };

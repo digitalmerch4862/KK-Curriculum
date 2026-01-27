@@ -1,89 +1,38 @@
-import { GoogleGenAI, Type, Modality } from "@google/genai";
+
+import { GoogleGenAI, Modality, Type } from "@google/genai";
+
+// Always use the API key from process.env.API_KEY as per system requirements
+const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
 /**
- * Service for generating Sunday School lesson content and audio using Gemini.
+ * Generates a full lesson structure using Gemini AI.
  */
-
-// Helper to get a fresh AI instance with the current environment key
-const getAi = () => {
-  // Always use process.env.API_KEY and named parameter as per guidelines.
-  // The API key is injected automatically into the environment.
-  return new GoogleGenAI({ apiKey: process.env.API_KEY });
-};
-
-export const generateLessonSummary = async (content: string) => {
-  const ai = getAi();
+export const generateFullLesson = async (goal: string, context: string) => {
   const response = await ai.models.generateContent({
     model: "gemini-3-flash-preview",
-    contents: `Summarize the following lesson content into 2-3 engaging sentences for teachers. Content: ${content}`,
-  });
-  return response.text;
-};
-
-export const categorizeLessonTitle = async (title: string) => {
-  const categories = [
-    "PENTATEUCH",
-    "HISTORY",
-    "POETRY",
-    "THE PROPHETS",
-    "THE GOSPELS",
-    "ACTS & EPISTLES",
-    "REVELATION",
-  ];
-
-  const ai = getAi();
-  const response = await ai.models.generateContent({
-    model: "gemini-3-flash-preview",
-    contents: `Given the Sunday School lesson title "${title}", which of these biblical categories does it best fit into?
-Categories: [${categories.join(", ")}].
-Return only the category name from the list provided exactly as written. If unsure, return "HISTORY".`,
-  });
-
-  const result = response.text?.trim().toUpperCase() || "HISTORY";
-  return categories.find((c) => result.includes(c)) || "HISTORY";
-};
-
-export const generateFullLesson = async (goal: string, existingContext: string) => {
-  const prompt = `
-Architect a complete Sunday School lesson plan based on this user's summary goal or lesson objective:
-"${goal}"
-
-This objective describes what the lesson is about, who it is for, and the spiritual goals for the listeners.
-
-Context of existing lessons in the system: [${existingContext}]
-
-CRITICAL INSTRUCTION:
-- If a lesson with this title or core story already exists in the context, do NOT duplicate the approach. Propose a FRESH perspective or a complementary deep-dive.
-- If it is new, provide a comprehensive standard plan.
-
-Structure your response as a valid JSON object with:
-- title: A compelling lesson title.
-- summary: A 2-sentence teacher overview.
-- read: Array of objects { title, content }
-- teach: Array of objects { title, content }
-- engage: Array of objects { title, content }
-  `;
-
-  const ai = getAi();
-  const response = await ai.models.generateContent({
-    model: "gemini-3-pro-preview",
-    contents: prompt,
+    contents: `
+      You are the Kingdom Kids AI Architect. 
+      Create a curriculum based on this objective: "${goal}". 
+      Existing lessons for context: ${context}.
+      IMPORTANT: Respond entirely in English.
+    `,
     config: {
       responseMimeType: "application/json",
       responseSchema: {
         type: Type.OBJECT,
         properties: {
-          title: { type: Type.STRING },
-          summary: { type: Type.STRING },
+          title: { type: Type.STRING, description: "The name of the mission/lesson" },
+          summary: { type: Type.STRING, description: "Brief mission briefing in English" },
           read: {
             type: Type.ARRAY,
             items: {
               type: Type.OBJECT,
               properties: {
                 title: { type: Type.STRING },
-                content: { type: Type.STRING },
+                content: { type: Type.STRING }
               },
-            },
+              required: ["title", "content"]
+            }
           },
           teach: {
             type: Type.ARRAY,
@@ -91,9 +40,10 @@ Structure your response as a valid JSON object with:
               type: Type.OBJECT,
               properties: {
                 title: { type: Type.STRING },
-                content: { type: Type.STRING },
+                content: { type: Type.STRING }
               },
-            },
+              required: ["title", "content"]
+            }
           },
           engage: {
             type: Type.ARRAY,
@@ -101,149 +51,67 @@ Structure your response as a valid JSON object with:
               type: Type.OBJECT,
               properties: {
                 title: { type: Type.STRING },
-                content: { type: Type.STRING },
+                content: { type: Type.STRING }
               },
-            },
-          },
+              required: ["title", "content"]
+            }
+          }
         },
-        required: ["title", "summary", "read", "teach", "engage"],
-      },
+        required: ["title", "summary", "read", "teach", "engage"]
+      }
     },
   });
 
-  try {
-    return JSON.parse(response.text || "{}");
-  } catch (e) {
-    console.error("Failed to parse AI generation result", e);
-    return null;
-  }
+  const text = response.text;
+  if (!text) throw new Error("No response text received from Gemini");
+  return JSON.parse(text);
 };
 
-export const generateDiscussionQuestions = async (content: string, gradeRange: string) => {
-  const ai = getAi();
+/**
+ * Categorizes a lesson title into predefined biblical categories.
+ */
+export const categorizeLessonTitle = async (title: string) => {
   const response = await ai.models.generateContent({
     model: "gemini-3-flash-preview",
-    contents: `Generate 5 age-appropriate discussion questions for children in grades ${gradeRange} based on this lesson content: ${content}`,
+    contents: `Categorize this Bible lesson title: "${title}". 
+      Options: PENTATEUCH, HISTORY, POETRY, THE PROPHETS, THE GOSPELS, ACTS & EPISTLES, REVELATION.
+      Return ONLY the category name.`,
   });
-  return response.text;
+  return response.text.trim();
 };
 
-export const generateActivitiesDraft = async (content: string, gradeRange: string) => {
-  const ai = getAi();
+/**
+ * Generates a short summary for the mission dashboard.
+ */
+export const generateLessonSummary = async (content: string) => {
   const response = await ai.models.generateContent({
-    model: "gemini-3-pro-preview",
-    contents: `Create 2 creative hands-on activities based on this lesson for children in grades ${gradeRange}. Return as a JSON list.`,
+    model: "gemini-3-flash-preview",
+    contents: `Summarize this lesson into 2 short, engaging sentences for a teacher's briefing. Use professional and encouraging English: ${content}`,
+  });
+  return response.text.trim();
+};
+
+/**
+ * Generates base64 PCM audio data for lesson narration.
+ */
+export const generateTTS = async (text: string, voiceName: string = 'Kore') => {
+  // Normalize voice name to Title Case as expected by the API
+  const formattedVoice = voiceName.charAt(0).toUpperCase() + voiceName.slice(1).toLowerCase();
+  
+  const response = await ai.models.generateContent({
+    model: "gemini-2.5-flash-preview-tts",
+    contents: [{ parts: [{ text }] }],
     config: {
-      responseMimeType: "application/json",
-      responseSchema: {
-        type: Type.ARRAY,
-        items: {
-          type: Type.OBJECT,
-          properties: {
-            title: { type: Type.STRING },
-            supplies: { type: Type.ARRAY, items: { type: Type.STRING } },
-            instructions: { type: Type.STRING },
-            duration_minutes: { type: Type.NUMBER },
-          },
-          required: ["title", "supplies", "instructions", "duration_minutes"],
+      responseModalities: [Modality.AUDIO],
+      speechConfig: {
+        voiceConfig: {
+          prebuiltVoiceConfig: { voiceName: formattedVoice },
         },
       },
     },
   });
 
-  try {
-    const text = response.text?.trim() || "[]";
-    return JSON.parse(text);
-  } catch (e) {
-    console.error("Failed to parse Gemini response as JSON", e);
-    return [];
-  }
-};
-
-/**
- * Sanitizes text for TTS to prevent API rejection errors.
- */
-function sanitizeForTTS(text: string): string | null {
-  if (!text || typeof text !== "string") return null;
-
-  let cleaned = text.trim();
-
-  // Minimum length check
-  if (cleaned.length < 2) return null;
-
-  // Replace unicode characters that TTS doesn't like
-  cleaned = cleaned
-    .replace(/[\u2018\u2019]/g, "'") // Smart single quotes
-    .replace(/[\u201C\u201D]/g, '"') // Smart double quotes
-    .replace(/[\u2013\u2014]/g, "-") // Em/en dashes
-    .replace(/[\u2026]/g, "...") // Ellipsis
-    .replace(/[^\x00-\x7F]/g, "") // Remove non-ASCII
-    .replace(/[^\w\s.,!?;:'\-()&]/g, " ") // Keep only safe punctuation
-    .replace(/\s+/g, " ")
-    .trim();
-
-  if (cleaned.length < 2) return null;
-
-  // Ensure it ends with punctuation for more natural speech
-  if (!/[.!?]$/.test(cleaned)) cleaned += ".";
-
-  return cleaned;
-}
-
-/**
- * Normalize voice name to TitleCase ("kore" -> "Kore")
- */
-function normalizeVoiceName(voiceName?: string): string {
-  const v = (voiceName || "Kore").trim();
-  if (!v) return "Kore";
-  return v.charAt(0).toUpperCase() + v.slice(1).toLowerCase();
-}
-
-/**
- * Generates audio bytes from text using a Gemini TTS-capable model.
- * Returns base64 PCM audio (16-bit PCM, usually 24kHz mono) via inlineData.data.
- *
- * NOTE: Use TTS model variants such as gemini-2.5-flash-preview-tts
- * and request AUDIO modality with speechConfig.
- */
-export const generateTTS = async (text: string, voiceName: string = "Kore") => {
-  const sanitized = sanitizeForTTS(text);
-  if (!sanitized) {
-    console.log("TTS: Text rejected after sanitization");
-    return null;
-  }
-
-  try {
-    const ai = getAi();
-    const voice = normalizeVoiceName(voiceName);
-
-    const response = await ai.models.generateContent({
-      // ✅ IMPORTANT: This model supports native TTS audio output
-      model: "gemini-2.5-flash-preview-tts",
-      contents: [{ parts: [{ text: sanitized }] }],
-      config: {
-        responseModalities: [Modality.AUDIO],
-        speechConfig: {
-          voiceConfig: {
-            prebuiltVoiceConfig: { voiceName: voice },
-          },
-        },
-      },
-    });
-
-    // Find first part that contains inline audio data
-    const parts = response.candidates?.[0]?.content?.parts || [];
-    const audioPart = parts.find((p: any) => p?.inlineData?.data);
-    const base64Audio = audioPart?.inlineData?.data;
-
-    if (!base64Audio) {
-      console.warn("TTS: No audio data returned for text:", sanitized.substring(0, 60));
-      return null;
-    }
-
-    return base64Audio;
-  } catch (error: any) {
-    console.error("TTS Generation Error:", error?.message || error);
-    return null;
-  }
+  // Extract base64 from candidates
+  const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+  return base64Audio;
 };
