@@ -1,13 +1,23 @@
-
 import { GoogleGenAI, Modality, Type } from "@google/genai";
 
-// Always use the API key from process.env.API_KEY as per system requirements
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+/**
+ * Initialize Gemini AI Client.
+ * Note: process.env.API_KEY is automatically injected by the environment.
+ */
+const getAIClient = () => {
+  const apiKey = process.env.API_KEY;
+  if (!apiKey) {
+    console.warn("Warning: API_KEY is not defined. AI features will be unavailable.");
+  }
+  return new GoogleGenAI({ apiKey: apiKey || '' });
+};
 
 /**
  * Generates a full lesson structure using Gemini AI.
+ * Uses gemini-3-flash-preview for speed and efficiency.
  */
 export const generateFullLesson = async (goal: string, context: string) => {
+  const ai = getAIClient();
   const response = await ai.models.generateContent({
     model: "gemini-3-flash-preview",
     contents: `
@@ -71,30 +81,33 @@ export const generateFullLesson = async (goal: string, context: string) => {
  * Categorizes a lesson title into predefined biblical categories.
  */
 export const categorizeLessonTitle = async (title: string) => {
+  const ai = getAIClient();
   const response = await ai.models.generateContent({
     model: "gemini-3-flash-preview",
     contents: `Categorize this Bible lesson title: "${title}". 
       Options: PENTATEUCH, HISTORY, POETRY, THE PROPHETS, THE GOSPELS, ACTS & EPISTLES, REVELATION.
       Return ONLY the category name.`,
   });
-  return response.text.trim();
+  return response.text?.trim() || 'HISTORY';
 };
 
 /**
  * Generates a short summary for the mission dashboard.
  */
 export const generateLessonSummary = async (content: string) => {
+  const ai = getAIClient();
   const response = await ai.models.generateContent({
     model: "gemini-3-flash-preview",
     contents: `Summarize this lesson into 2 short, engaging sentences for a teacher's briefing. Use professional and encouraging English: ${content}`,
   });
-  return response.text.trim();
+  return response.text?.trim() || '';
 };
 
 /**
- * Generates base64 PCM audio data for lesson narration.
+ * Generates base64 PCM audio data for lesson narration using TTS model.
  */
 export const generateTTS = async (text: string, voiceName: string = 'Kore') => {
+  const ai = getAIClient();
   // Normalize voice name to Title Case as expected by the API
   const formattedVoice = voiceName.charAt(0).toUpperCase() + voiceName.slice(1).toLowerCase();
   
