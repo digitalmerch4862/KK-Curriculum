@@ -6,49 +6,60 @@ const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
 /**
  * Generates a full lesson structure using Gemini AI.
- * Adheres to the "Faith Pathway AI Lesson Architect" persona and schema.
  */
 export const generateFullLesson = async (goal: string, context: string) => {
   const response = await ai.models.generateContent({
     model: "gemini-3-flash-preview",
+    contents: `
+      You are the Kingdom Kids AI Architect. 
+      Create a curriculum based on this objective: "${goal}". 
+      Existing lessons for context: ${context}.
+      IMPORTANT: Respond entirely in English.
+    `,
     config: {
-      systemInstruction: `You are the "Faith Pathway AI Lesson Architect," an expert Sunday School Curriculum Creator. 
-      Your goal is to generate engaging, age-appropriate Christian lessons for kids (ages 5-11).
-      You must ALWAYS respond in valid JSON format so the app can render the content.
-
-      Lesson Structure:
-      1. title: A catchy name for the lesson.
-      2. scripture: The primary Bible verse (include the version, e.g., NIV).
-      3. objective: One sentence on what the kids will learn.
-      4. the_hook: A 2-minute opening activity or story to grab attention.
-      5. the_lesson: An array of 3 clear, simple points for the teacher to explain.
-      6. group_activity: A hands-on game or craft related to the theme.
-      7. closing_prayer: A short, 2-sentence prayer.
-
-      Constraints:
-      - Use simple language suitable for ages 5-11.
-      - DO NOT include any conversational text outside of the JSON block.
-      - Ensure all JSON keys are lowercase and use underscores (e.g., "closing_prayer").`,
       responseMimeType: "application/json",
       responseSchema: {
         type: Type.OBJECT,
         properties: {
-          title: { type: Type.STRING },
-          scripture: { type: Type.STRING },
-          objective: { type: Type.STRING },
-          the_hook: { type: Type.STRING },
-          the_lesson: {
+          title: { type: Type.STRING, description: "The name of the mission/lesson" },
+          summary: { type: Type.STRING, description: "Brief mission briefing in English" },
+          read: {
             type: Type.ARRAY,
-            items: { type: Type.STRING },
-            description: "An array of 3 clear teaching points"
+            items: {
+              type: Type.OBJECT,
+              properties: {
+                title: { type: Type.STRING },
+                content: { type: Type.STRING }
+              },
+              required: ["title", "content"]
+            }
           },
-          group_activity: { type: Type.STRING },
-          closing_prayer: { type: Type.STRING }
+          teach: {
+            type: Type.ARRAY,
+            items: {
+              type: Type.OBJECT,
+              properties: {
+                title: { type: Type.STRING },
+                content: { type: Type.STRING }
+              },
+              required: ["title", "content"]
+            }
+          },
+          engage: {
+            type: Type.ARRAY,
+            items: {
+              type: Type.OBJECT,
+              properties: {
+                title: { type: Type.STRING },
+                content: { type: Type.STRING }
+              },
+              required: ["title", "content"]
+            }
+          }
         },
-        required: ["title", "scripture", "objective", "the_hook", "the_lesson", "group_activity", "closing_prayer"]
+        required: ["title", "summary", "read", "teach", "engage"]
       }
     },
-    contents: `Create a Sunday School lesson based on this objective: "${goal}". Existing context: ${context}.`,
   });
 
   const text = response.text;

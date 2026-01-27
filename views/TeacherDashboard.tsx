@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo } from 'react';
 import { db } from '../services/supabaseService.ts';
 import { Lesson, UserRole, Profile, LessonContentStructure, LessonVideo, Attachment } from '../types.ts';
@@ -20,6 +21,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
   const [loading, setLoading] = useState(true);
   
   const [isNavExpanded, setIsNavExpanded] = useState(false);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [activeVideo, setActiveVideo] = useState<LessonVideo | null>(null);
   const [viewingResource, setViewingResource] = useState<Attachment | null>(null);
 
@@ -67,6 +69,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
       const full = await db.lessons.get(id);
       setSelectedLesson(full);
       setIsNavExpanded(false);
+      setIsMobileMenuOpen(false);
       window.scrollTo({ top: 0, behavior: 'smooth' });
     } catch (e) { 
       alert("Error loading lesson details."); 
@@ -147,14 +150,14 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
   );
 
   const categories = [
-    { name: 'ALL MISSIONS', icon: <LayoutGrid size={16} /> },
-    { name: 'PENTATEUCH', icon: <Book size={16} /> },
-    { name: 'HISTORY', icon: <History size={16} /> },
-    { name: 'POETRY', icon: <Music size={16} /> },
-    { name: 'THE PROPHETS', icon: <ScrollText size={16} /> },
-    { name: 'THE GOSPELS', icon: <Cross size={16} /> },
-    { name: 'ACTS & EPISTLES', icon: <Send size={16} /> },
-    { name: 'REVELATION', icon: <Globe size={16} /> }
+    { name: 'ALL MISSIONS', icon: <LayoutGrid size={18} /> },
+    { name: 'PENTATEUCH', icon: <Book size={18} /> },
+    { name: 'HISTORY', icon: <History size={18} /> },
+    { name: 'POETRY', icon: <Music size={18} /> },
+    { name: 'THE PROPHETS', icon: <ScrollText size={18} /> },
+    { name: 'THE GOSPELS', icon: <Cross size={18} /> },
+    { name: 'ACTS & EPISTLES', icon: <Send size={18} /> },
+    { name: 'REVELATION', icon: <Globe size={18} /> }
   ];
 
   const lessonStructure = selectedLesson ? parseMarkdownToStructure(selectedLesson.content || '') : null;
@@ -169,7 +172,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
   }, [lessonStructure]);
 
   return (
-    <div className="min-h-screen bg-[#F4F7FA] text-slate-900 font-sans selection:bg-pink-100 flex flex-col overflow-x-hidden">
+    <div className="min-h-screen bg-[#F4F7FA] text-slate-900 font-sans selection:bg-pink-100 flex flex-col md:flex-row overflow-x-hidden">
       
       {/* --- VIDEOKE CONTROL --- */}
       {selectedLesson && (
@@ -218,68 +221,100 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
         </div>
       )}
 
-      {/* --- MAIN HEADER (Only visible when not viewing a lesson) --- */}
+      {/* --- SIDEBAR NAVIGATION --- */}
       {!selectedLesson && (
-        <header className="bg-white border-b border-slate-100 sticky top-0 z-50">
-          <div className="max-w-[1440px] mx-auto px-6 py-4 flex items-center justify-between gap-6">
-            <div className="flex items-center gap-3 shrink-0">
-              <div className="bg-[#EF4E92] w-10 h-10 rounded-xl flex items-center justify-center font-black text-white shadow-lg">K</div>
-              <div className="hidden sm:block">
-                <span className="font-black text-xl tracking-tighter text-[#003882] uppercase block leading-none">Mission Control</span>
-                <span className="text-[8px] font-black text-slate-300 uppercase tracking-widest mt-1">Faith Pathway</span>
+        <>
+          {/* Mobile Backdrop */}
+          {isMobileMenuOpen && (
+            <div 
+              className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-40 md:hidden animate-in fade-in duration-300" 
+              onClick={() => setIsMobileMenuOpen(false)}
+            />
+          )}
+
+          <aside className={`
+            fixed md:relative w-[280px] md:w-72 bg-white border-r border-slate-200 flex flex-col h-full md:h-screen overflow-y-auto z-50 transition-transform duration-300 ease-in-out
+            ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}
+          `}>
+            <div className="p-8 border-b border-slate-100 mb-6 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="bg-[#EF4E92] w-10 h-10 rounded-xl flex items-center justify-center font-black text-white shadow-lg">K</div>
+                <span className="font-black text-xl tracking-tighter text-[#003882] uppercase">Mission Control</span>
               </div>
-            </div>
-
-            <div className="flex-1 max-w-xl relative">
-              <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300" size={18} />
-              <input 
-                type="text" 
-                placeholder="Find a mission..." 
-                className="w-full pl-12 pr-6 py-3 bg-slate-50 border border-transparent rounded-2xl text-sm outline-none focus:bg-white focus:ring-2 focus:ring-[#EF4E92] transition-all shadow-inner"
-                value={searchTerm}
-                onChange={e => setSearchTerm(e.target.value)}
-              />
-            </div>
-
-            <button onClick={onLogout} className="shrink-0 text-[10px] font-black uppercase text-slate-400 hover:text-red-500 tracking-widest flex items-center gap-2 p-2 sm:px-4 sm:py-2 rounded-xl transition-all">
-              <LogOut size={16} /> <span className="hidden md:inline">LOGOUT</span>
-            </button>
-          </div>
-
-          {/* Category Chip Bar */}
-          <div className="max-w-[1440px] mx-auto px-6 pb-4 overflow-x-auto scrollbar-hide flex items-center gap-3">
-            {categories.map((cat) => (
-              <button
-                key={cat.name}
-                onClick={() => setCategoryFilter(cat.name)}
-                className={`whitespace-nowrap flex items-center gap-2 px-5 py-2.5 rounded-full transition-all font-black text-[10px] uppercase tracking-widest border ${
-                  categoryFilter === cat.name 
-                  ? 'bg-[#003882] text-white border-[#003882] shadow-lg' 
-                  : 'bg-white text-slate-400 border-slate-100 hover:border-slate-300'
-                }`}
-              >
-                <span className={categoryFilter === cat.name ? 'text-[#EF4E92]' : 'text-slate-300'}>{cat.icon}</span>
-                {cat.name}
+              <button onClick={() => setIsMobileMenuOpen(false)} className="md:hidden p-2 text-slate-300 hover:text-slate-600 transition-colors">
+                <X size={20} />
               </button>
-            ))}
-          </div>
-        </header>
+            </div>
+
+            <nav className="flex-1 px-4 space-y-1">
+              {categories.map((cat) => (
+                <button
+                  key={cat.name}
+                  onClick={() => {
+                    setCategoryFilter(cat.name);
+                    setIsMobileMenuOpen(false);
+                  }}
+                  className={`w-full flex items-center gap-4 px-5 py-4 rounded-2xl transition-all font-black text-[11px] uppercase tracking-widest ${
+                    categoryFilter === cat.name 
+                    ? 'bg-[#003882] text-white shadow-xl shadow-blue-100' 
+                    : 'text-slate-400 hover:bg-slate-50 hover:text-slate-600'
+                  }`}
+                >
+                  <span className={categoryFilter === cat.name ? 'text-[#EF4E92]' : 'text-slate-300'}>{cat.icon}</span>
+                  {cat.name}
+                </button>
+              ))}
+            </nav>
+
+            <div className="p-8 border-t border-slate-100 mt-6">
+              <button onClick={onLogout} className="w-full text-[10px] font-black uppercase text-slate-400 hover:text-red-500 tracking-widest flex items-center gap-3 py-3 px-5 rounded-2xl hover:bg-red-50 transition-all">
+                <LogOut size={16} /> LOGOUT
+              </button>
+            </div>
+          </aside>
+        </>
       )}
 
       {/* --- MAIN CONTENT AREA --- */}
-      <main className="flex-1 min-w-0">
+      <main className="flex-1 min-w-0 h-full overflow-y-auto">
         {!selectedLesson ? (
-          <div className="max-w-[1440px] mx-auto p-6 sm:p-10 animate-in fade-in duration-700">
-            <div className="flex flex-col mb-10">
-              <h1 className="text-3xl sm:text-4xl md:text-5xl font-black text-[#003882] tracking-tighter uppercase mb-2">
-                {categoryFilter}
-              </h1>
-              <p className="text-slate-400 font-medium text-sm sm:text-base">Equip yourself with biblical truth for the next generation.</p>
+          <div className="p-5 sm:p-8 md:p-12 animate-in fade-in duration-700">
+            {/* Mobile Header Toggle */}
+            <div className="md:hidden flex items-center justify-between mb-8">
+              <div className="flex items-center gap-3">
+                <div className="bg-[#EF4E92] w-8 h-8 rounded-lg flex items-center justify-center font-black text-white text-xs">K</div>
+                <span className="font-black text-[#003882] uppercase text-sm tracking-tighter">Mission Control</span>
+              </div>
+              <button 
+                onClick={() => setIsMobileMenuOpen(true)} 
+                className="p-2.5 bg-white rounded-xl shadow-sm border border-slate-100 active:scale-95 transition-transform"
+              >
+                <Menu size={20} />
+              </button>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 sm:gap-8">
+            <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-6 mb-12">
+              <div>
+                <h1 className="text-3xl sm:text-4xl md:text-5xl font-black text-[#003882] tracking-tighter uppercase mb-2">
+                  {categoryFilter}
+                </h1>
+                <p className="text-slate-400 font-medium text-sm sm:text-base">Equip yourself with biblical truth for the next generation.</p>
+              </div>
+              <div className="relative w-full xl:w-80">
+                <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300" size={18} />
+                <input 
+                  type="text" 
+                  placeholder="Find a mission..." 
+                  className="w-full pl-12 pr-6 py-4 bg-white border border-slate-100 rounded-2xl text-sm outline-none focus:ring-2 focus:ring-[#EF4E92] transition-all shadow-sm"
+                  value={searchTerm}
+                  onChange={e => setSearchTerm(e.target.value)}
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 gap-6 sm:gap-8">
               {loading ? (
-                Array(8).fill(0).map((_, i) => <div key={i} className="bg-white/50 h-80 rounded-[48px] animate-pulse"></div>)
+                Array(6).fill(0).map((_, i) => <div key={i} className="bg-white/50 h-80 rounded-[48px] animate-pulse"></div>)
               ) : (
                 filteredLessons.map(lesson => {
                   const thumb = getVideoThumbnail(lesson.videos);
@@ -292,7 +327,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
                       className="group bg-white rounded-[40px] border border-slate-50 shadow-sm hover:shadow-2xl hover:scale-[1.02] transition-all cursor-pointer flex flex-col overflow-hidden min-h-[420px] sm:min-h-[460px]"
                     >
                       {/* Thumbnail Stage */}
-                      <div className="h-44 sm:h-52 relative overflow-hidden bg-slate-100">
+                      <div className="h-44 sm:h-52 md:h-56 relative overflow-hidden bg-slate-100">
                         {thumb ? (
                           <img 
                             src={thumb} 

@@ -88,32 +88,4 @@ export interface LessonProgress {
   completed_at?: string;
 }
 
-/**
- * Added Planner and Schedule types to resolve compilation errors
- */
-export type FrequencyType = 'DAILY' | 'WEEKLY' | 'MONTHLY';
-
-export interface PlannerConfig {
-  id: string;
-  category: string;
-  start_date: string;
-  frequency: FrequencyType;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface LessonOccurrence {
-  id: string;
-  category: string;
-  scheduled_date: string;
-  lesson_id: string | null;
-  status: 'SCHEDULED' | 'COMPLETED' | 'CANCELLED';
-  created_at: string;
-  updated_at: string;
-  lesson?: {
-    title: string;
-    summary: string;
-  };
-}
-
 export type AuthUser = Profile | null;
