@@ -1,10 +1,10 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { db } from '../services/supabaseService.ts';
+import { db, DatabaseError } from '../services/supabaseService.ts';
 import { Lesson, UserRole, Profile, LessonContentStructure, LessonOccurrence, PlannerConfig } from '../types.ts';
 import { 
   X, ArrowLeft, ChevronRight, Download, BookOpen, GraduationCap, Users, 
-  Calendar, LogOut, Clock, Database, RefreshCw, Zap
+  Calendar, LogOut, Clock, Database, RefreshCw, Zap, AlertTriangle, ShieldCheck
 } from 'lucide-react';
 import TTSController from '../components/TTSController.tsx';
 
@@ -17,29 +17,25 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
   const [nextOccurrence, setNextOccurrence] = useState<LessonOccurrence | null>(null);
   const [selectedLesson, setSelectedLesson] = useState<Lesson | null>(null);
   const [loading, setLoading] = useState(true);
-  const [viewingResource, setViewingResource] = useState<any>(null);
   const [activeReadingId, setActiveReadingId] = useState<string | null>(null);
   const [isTTSPlaying, setIsTTSPlaying] = useState(false);
   const [error, setError] = useState<{message: string, isSchema: boolean} | null>(null);
 
   useEffect(() => {
     fetchNextMission();
-    
-    // Refresh check on focus
-    window.addEventListener('focus', fetchNextMission);
-    return () => window.removeEventListener('focus', fetchNextMission);
   }, []);
 
   const fetchNextMission = async () => {
     setLoading(true);
     setError(null);
     try {
-      // For this demo, we use 'HISTORY' as the default mission category
       const occ = await db.plannerOccurrences.getNextForTeacher('HISTORY');
       setNextOccurrence(occ);
     } catch (e: any) { 
-      console.error("Fetch Mission Error:", e);
-      setError({ message: e.message, isSchema: false });
+      setError({ 
+        message: e.message, 
+        isSchema: (e as DatabaseError).isSchemaError || false 
+      });
     } finally { 
       setLoading(false); 
     }
@@ -84,11 +80,50 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
     ];
   }, [lessonStructure]);
 
+  if (error?.isSchema) {
+    return (
+      <div className="min-h-screen bg-[#F8FAFC] flex flex-col items-center justify-center p-6 text-center">
+        <div className="bg-white rounded-[64px] p-12 md:p-20 shadow-2xl border border-gray-100 max-w-2xl space-y-8 animate-in zoom-in-95 duration-500">
+          <div className="w-24 h-24 bg-amber-50 text-amber-500 rounded-full flex items-center justify-center mx-auto shadow-lg">
+            <Database size={48} />
+          </div>
+          <div className="space-y-4">
+            <h1 className="text-4xl font-black text-[#003882] tracking-tighter uppercase leading-none">Connection Required</h1>
+            <p className="text-slate-500 text-lg font-medium leading-relaxed">
+              The Mission Timeline is ready in the database, but the API gateway hasn't refreshed its connection yet.
+            </p>
+          </div>
+          <div className="bg-slate-50 p-8 rounded-[40px] border border-slate-100 text-left space-y-6">
+            <div className="flex items-center gap-3 text-[#EF4E92]">
+              <ShieldCheck size={20} />
+              <h4 className="font-black text-[11px] uppercase tracking-widest">Administrator Action</h4>
+            </div>
+            <p className="text-xs text-slate-600 font-bold leading-relaxed">
+              1. Go to your <span className="text-[#003882]">Supabase Dashboard</span>.<br/>
+              2. Navigate to <span className="text-[#003882]">Settings -> API</span>.<br/>
+              3. Scroll to the bottom and click the <span className="bg-[#EF4E92] text-white px-2 py-1 rounded text-[10px]">SAVE</span> button.<br/>
+              4. This reboots the API service and clears the schema cache.
+            </p>
+          </div>
+          <div className="flex flex-col gap-4">
+            <button 
+              onClick={fetchNextMission}
+              className="w-full bg-[#003882] text-white py-6 rounded-full font-black uppercase tracking-widest shadow-xl hover:bg-[#003882]/90 transition-all flex items-center justify-center gap-3 active:scale-95"
+            >
+              <RefreshCw size={20} className={loading ? 'animate-spin' : ''} /> 
+              {loading ? 'RE-SYNCING...' : 'RE-TRY CONNECTION'}
+            </button>
+            <button onClick={onLogout} className="text-slate-400 font-black uppercase tracking-widest text-[10px] hover:text-black transition-colors">Log Out & Exit</button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-[#F4F7FA] text-slate-900 font-sans selection:bg-pink-100 flex flex-col overflow-x-hidden">
       {selectedLesson && <TTSController sections={ttsSections} onActiveIdChange={setActiveReadingId} onPlayingStatusChange={setIsTTSPlaying} />}
 
-      {/* HEADER */}
       {!selectedLesson && (
         <header className="bg-white border-b border-slate-100 sticky top-0 z-50">
           <div className="max-w-4xl mx-auto px-6 py-6 flex items-center justify-between">
@@ -104,7 +139,6 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
         </header>
       )}
 
-      {/* MAIN CONTENT */}
       <main className="flex-1 min-w-0">
         {!selectedLesson ? (
           <div className="max-w-4xl mx-auto p-6 md:p-10 animate-in fade-in duration-700">
@@ -166,7 +200,6 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
             )}
           </div>
         ) : (
-          /* LESSON DETAIL VIEW */
           <div className="max-w-4xl mx-auto px-6 py-10 md:py-20 animate-in fade-in slide-in-from-bottom-6 duration-700">
              <button onClick={() => setSelectedLesson(null)} className="flex items-center gap-3 text-[10px] font-black uppercase tracking-widest text-slate-400 hover:text-black mb-12"><ArrowLeft size={16} strokeWidth={3} /> Return Dashboard</button>
              <h1 className="text-5xl md:text-8xl font-black text-[#003882] tracking-tighter leading-none mb-10">{selectedLesson.title}</h1>

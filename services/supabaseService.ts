@@ -112,6 +112,16 @@ export const db = {
       }
     },
 
+    async upsertOccurrence(category: string, date: string, lessonId: string) {
+      const { error } = await supabase.from('planner_occurrences').upsert({
+        category,
+        scheduled_date: date,
+        lesson_id: lessonId,
+        status: 'SCHEDULED'
+      }, { onConflict: 'category,scheduled_date' });
+      if (error) handleSupabaseError(error, 'dispatching targeted mission');
+    },
+
     async wipeCategory(category: string) {
       const { error } = await supabase.from('planner_occurrences').delete().eq('category', category);
       if (error) handleSupabaseError(error, 'wiping timeline');
