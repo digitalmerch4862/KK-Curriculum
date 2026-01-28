@@ -1,5 +1,4 @@
 
-
 export enum UserRole {
   ADMIN = 'admin',
   TEACHER = 'teacher'
@@ -86,6 +85,13 @@ export interface LessonProgress {
   teacher_id: string;
   completed: boolean;
   completed_at?: string;
+}
+
+export interface LessonSchedule {
+  id: string;
+  lesson_id: string;
+  scheduled_date: string; // YYYY-MM-DD
+  lesson?: Lesson;
 }
 
 export type AuthUser = Profile | null;

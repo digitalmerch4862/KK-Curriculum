@@ -1,17 +1,37 @@
 
 import { supabase } from '../lib/supabaseClient.ts';
-import { UserRole, LessonStatus, Lesson, LessonActivity, LessonVideo, Attachment, LessonProgress } from '../types.ts';
+import { UserRole, LessonStatus, Lesson, LessonActivity, LessonVideo, Attachment, LessonProgress, LessonSchedule } from '../types.ts';
+
+/**
+ * Robust LocalStorage fallback for schedules if the table doesn't exist yet.
+ */
+const LOCAL_SCHEDULE_KEY = 'kk_local_schedules';
+
+const getLocalSchedules = (): LessonSchedule[] => {
+  try {
+    const data = localStorage.getItem(LOCAL_SCHEDULE_KEY);
+    return data ? JSON.parse(data) : [];
+  } catch { return []; }
+};
+
+const saveLocalSchedules = (schedules: LessonSchedule[]) => {
+  localStorage.setItem(LOCAL_SCHEDULE_KEY, JSON.stringify(schedules));
+};
 
 const handleSupabaseError = (error: any, context: string) => {
   console.error(`Supabase Error [${context}]:`, error);
   const message = error.message || error.details || JSON.stringify(error);
+  // We throw unless it's a "table not found" error which we handle in specific methods
   throw new Error(`${message} (Context: ${context})`);
+};
+
+const isTableNotFoundError = (error: any) => {
+  return error?.message?.includes('Could not find the table') || error?.code === 'PGRST116';
 };
 
 export const db = {
   lessons: {
     async list(role: UserRole) {
-      // Joining with lesson_videos to get thumbnails for the dashboard
       let query = supabase
         .from('lessons')
         .select(`
@@ -25,7 +45,6 @@ export const db = {
       }
 
       const { data, error } = await query;
-
       if (error) handleSupabaseError(error, 'fetching lessons');
       return data as Lesson[];
     },
@@ -61,7 +80,6 @@ export const db = {
         ...lessonPayload 
       } = lesson;
 
-      // If id is 'new', we let Supabase generate a UUID
       const payload = id && id !== 'new' ? { id, ...lessonPayload } : lessonPayload;
 
       const { data: lessonData, error: lError } = await supabase
@@ -76,57 +94,36 @@ export const db = {
       if (lError) handleSupabaseError(lError, 'saving lesson');
 
       if (activities && lessonData) {
-        const { error: dError } = await supabase.from('lesson_activities').delete().eq('lesson_id', lessonData.id);
-        if (dError) handleSupabaseError(dError, 'cleaning up old activities');
-
+        await supabase.from('lesson_activities').delete().eq('lesson_id', lessonData.id);
         if (activities.length > 0) {
           const activitiesToInsert = activities.map((a, i) => {
             const { id: _, lesson_id: __, ...rest } = a;
-            return {
-              ...rest,
-              lesson_id: lessonData.id,
-              sort_order: i
-            };
+            return { ...rest, lesson_id: lessonData.id, sort_order: i };
           });
-          const { error: aError } = await supabase.from('lesson_activities').insert(activitiesToInsert);
-          if (aError) handleSupabaseError(aError, 'saving activities');
+          await supabase.from('lesson_activities').insert(activitiesToInsert);
         }
       }
 
       if (videos && lessonData) {
-        const { error: dvError } = await supabase.from('lesson_videos').delete().eq('lesson_id', lessonData.id);
-        if (dvError) handleSupabaseError(dvError, 'cleaning up old videos');
-
+        await supabase.from('lesson_videos').delete().eq('lesson_id', lessonData.id);
         if (videos.length > 0) {
           const videosToInsert = videos.map((v, i) => {
             const { id: _, lesson_id: __, ...rest } = v;
-            return {
-              ...rest,
-              lesson_id: lessonData.id,
-              sort_order: i
-            };
+            return { ...rest, lesson_id: lessonData.id, sort_order: i };
           });
-          const { error: vError } = await supabase.from('lesson_videos').insert(videosToInsert);
-          if (vError) handleSupabaseError(vError, 'saving videos');
+          await supabase.from('lesson_videos').insert(videosToInsert);
         }
       }
 
       if (attachments && lessonData) {
-        const { error: daError } = await supabase.from('attachments').delete().eq('lesson_id', lessonData.id);
-        if (daError) handleSupabaseError(daError, 'cleaning up old attachments');
-
+        await supabase.from('attachments').delete().eq('lesson_id', lessonData.id);
         if (attachments.length > 0) {
-          const attachmentsToInsert = attachments.map((at) => {
-            // Strictly include ONLY the fields that exist in the schema
-            return {
-              name: at.name,
-              storage_path: at.storage_path,
-              lesson_id: lessonData.id
-              // Explicitly omitting: sort_order, size_bytes, type, created_at, id
-            };
-          });
-          const { error: atError } = await supabase.from('attachments').insert(attachmentsToInsert);
-          if (atError) handleSupabaseError(atError, 'saving attachments');
+          const attachmentsToInsert = attachments.map((at) => ({
+            name: at.name,
+            storage_path: at.storage_path,
+            lesson_id: lessonData.id
+          }));
+          await supabase.from('attachments').insert(attachmentsToInsert);
         }
       }
 
@@ -139,30 +136,78 @@ export const db = {
     }
   },
 
-  attachments: {
-    async add(attachment: Omit<Attachment, 'id' | 'created_at'>) {
-      // Stripping all invalid fields from payload
-      const payload = {
-        name: attachment.name,
-        storage_path: attachment.storage_path,
-        lesson_id: attachment.lesson_id
-      };
+  schedules: {
+    async list() {
       const { data, error } = await supabase
-        .from('attachments')
-        .insert(payload)
+        .from('lesson_schedules')
+        .select('*, lesson:lessons(*)')
+        .order('scheduled_date', { ascending: true });
+
+      if (error) {
+        if (isTableNotFoundError(error)) {
+          console.warn("Table 'lesson_schedules' not found. Falling back to LocalStorage.");
+          const locals = getLocalSchedules();
+          // To populate lesson details for local storage we need to fetch them
+          const lessons = await db.lessons.list(UserRole.ADMIN);
+          return locals.map(l => ({ ...l, lesson: lessons.find(less => less.id === l.lesson_id) }));
+        }
+        handleSupabaseError(error, 'fetching schedules');
+      }
+      return data as LessonSchedule[];
+    },
+
+    async getForDate(date: string) {
+      const { data, error } = await supabase
+        .from('lesson_schedules')
+        .select('*, lesson:lessons(*)')
+        .eq('scheduled_date', date)
+        .maybeSingle();
+
+      if (error) {
+        if (isTableNotFoundError(error)) {
+          const locals = getLocalSchedules();
+          const match = locals.find(l => l.scheduled_date === date);
+          if (!match) return null;
+          const lesson = await db.lessons.get(match.lesson_id);
+          return { ...match, lesson };
+        }
+        handleSupabaseError(error, 'fetching schedule for date');
+      }
+      return data as LessonSchedule;
+    },
+
+    async upsert(schedule: { lesson_id: string; scheduled_date: string }) {
+      const { data, error } = await supabase
+        .from('lesson_schedules')
+        .upsert(schedule, { onConflict: 'scheduled_date' })
         .select()
         .single();
-      if (error) handleSupabaseError(error, 'adding attachment record');
+
+      if (error) {
+        if (isTableNotFoundError(error)) {
+          const locals = getLocalSchedules();
+          const existingIdx = locals.findIndex(l => l.scheduled_date === schedule.scheduled_date);
+          const newItem = { id: Math.random().toString(36).substr(2, 9), ...schedule };
+          if (existingIdx >= 0) locals[existingIdx] = newItem;
+          else locals.push(newItem);
+          saveLocalSchedules(locals);
+          return newItem;
+        }
+        handleSupabaseError(error, 'upserting schedule');
+      }
       return data;
     },
-    async remove(id: string, storagePath: string) {
-      if (storagePath && !storagePath.startsWith('http')) {
-        const { error: sError } = await supabase.storage.from('lesson-assets').remove([storagePath]);
-        if (sError) console.warn("Storage removal failed", sError);
+
+    async delete(id: string) {
+      const { error } = await supabase.from('lesson_schedules').delete().eq('id', id);
+      if (error) {
+        if (isTableNotFoundError(error)) {
+          const locals = getLocalSchedules();
+          saveLocalSchedules(locals.filter(l => l.id !== id));
+          return;
+        }
+        handleSupabaseError(error, 'deleting schedule');
       }
-      
-      const { error: dError } = await supabase.from('attachments').delete().eq('id', id);
-      if (dError) handleSupabaseError(dError, 'removing attachment record');
     }
   },
 
@@ -182,16 +227,15 @@ export const db = {
     async toggle(lessonId: string, teacherId: string) {
       const existing = await this.get(lessonId, teacherId);
       if (existing) {
-        const { error } = await supabase
+        await supabase
           .from('lesson_progress')
           .update({ 
             completed: !existing.completed,
             completed_at: !existing.completed ? new Date().toISOString() : null
           })
           .eq('id', existing.id);
-        if (error) handleSupabaseError(error, 'updating progress');
       } else {
-        const { error } = await supabase
+        await supabase
           .from('lesson_progress')
           .insert({
             lesson_id: lessonId,
@@ -199,30 +243,7 @@ export const db = {
             completed: true,
             completed_at: new Date().toISOString()
           });
-        if (error) handleSupabaseError(error, 'creating progress');
       }
-    }
-  },
-
-  storage: {
-    async upload(file: File) {
-      const fileExt = file.name.split('.').pop();
-      const fileName = `${Math.random().toString(36).substring(2)}-${Date.now()}.${fileExt}`;
-      const { data, error } = await supabase.storage
-        .from('lesson-assets')
-        .upload(fileName, file);
-      
-      if (error) handleSupabaseError(error, 'uploading file');
-      return data;
-    },
-
-    async getSignedUrl(path: string) {
-      const { data, error } = await supabase.storage
-        .from('lesson-assets')
-        .createSignedUrl(path, 3600);
-      
-      if (error) handleSupabaseError(error, 'generating download link');
-      return data.signedUrl;
     }
   }
 };
