@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo } from 'react';
 import { db } from '../services/supabaseService.ts';
 import { categorizeLessonTitle, generateFullLesson, generateLessonSummary } from '../services/geminiService.ts';
@@ -116,11 +115,23 @@ const AdminDashboard: React.FC<{ user: Profile; onLogout: () => void }> = ({ use
     setLoading(true);
     try {
       const [l, s] = await Promise.all([db.lessons.list(UserRole.ADMIN), db.schedules.list()]);
-      setLessons(l);
-      setSchedules(s);
+      setLessons(l || []);
+      setSchedules(s || []);
     } catch (e) { console.error(e); }
     setLoading(false);
   };
+
+  /**
+   * ROBUST MANUAL JOIN: Map lessons to schedules if they aren't already joined by Supabase.
+   * This is critical if the Supabase foreign keys are not perfectly defined.
+   */
+  const enrichedSchedules = useMemo(() => {
+    return schedules.map(sch => {
+      if (sch.lesson) return sch;
+      const matchingLesson = lessons.find(l => l.id === sch.lesson_id);
+      return { ...sch, lesson: matchingLesson };
+    });
+  }, [schedules, lessons]);
 
   const filteredLessons = useMemo(() => {
     if (!searchQuery.trim()) return lessons;
@@ -201,7 +212,7 @@ const AdminDashboard: React.FC<{ user: Profile; onLogout: () => void }> = ({ use
       }, activities, videos, attachments);
       
       setEditingId(null);
-      fetchData();
+      await fetchData();
     } catch (e) { 
       console.error("Save failed:", e);
       alert("Error saving lesson: " + (e instanceof Error ? e.message : String(e))); 
@@ -224,11 +235,7 @@ const AdminDashboard: React.FC<{ user: Profile; onLogout: () => void }> = ({ use
         payload.id = existing.id;
       }
 
-      const result = await db.schedules.upsert(payload);
-      
-      // If result is null and we didn't throw (meaning handleSupabaseError returned true), 
-      // it means we're in a "schema missing" warning state. 
-      // We still update the UI to show success for better UX in broken environments.
+      await db.schedules.upsert(payload);
       
       await fetchData();
       alert("Mission assigned successfully!");
@@ -244,7 +251,7 @@ const AdminDashboard: React.FC<{ user: Profile; onLogout: () => void }> = ({ use
     if (!confirm("Remove this schedule?")) return;
     try {
       await db.schedules.delete(id);
-      fetchData();
+      await fetchData();
     } catch (e) { alert(e); }
   };
 
@@ -576,12 +583,12 @@ const AdminDashboard: React.FC<{ user: Profile; onLogout: () => void }> = ({ use
             <div className="space-y-6">
               <h3 className="font-black text-xl uppercase tracking-widest text-[#003882] px-6">Scheduled Deployment</h3>
               <div className="space-y-4">
-                {schedules.length === 0 ? (
+                {enrichedSchedules.length === 0 ? (
                   <div className="bg-white p-12 rounded-[48px] border-2 border-dashed border-gray-100 text-center">
                     <p className="text-gray-300 font-black uppercase tracking-widest text-[10px]">No schedules currently active</p>
                   </div>
                 ) : (
-                  schedules.map(sch => (
+                  enrichedSchedules.map(sch => (
                     <div key={sch.id} className="bg-white rounded-[32px] p-8 border border-gray-100 shadow-sm flex items-center justify-between group">
                       <div className="flex items-center gap-8">
                         <div className="flex flex-col items-center justify-center bg-slate-50 w-20 h-20 rounded-3xl border border-slate-100">
