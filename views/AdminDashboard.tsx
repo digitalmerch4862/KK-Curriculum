@@ -172,7 +172,7 @@ const AdminDashboard: React.FC<{ user: Profile; onLogout: () => void }> = ({ use
   };
 
   const handleScheduleLesson = async () => {
-    if (!selectedLessonId) return alert("Select a lesson");
+    if (!selectedLessonId) return alert("Select a mission");
     setLoading(true);
     try {
       await db.schedules.upsert({ lesson_id: selectedLessonId, scheduled_date: selectedDate });
@@ -308,9 +308,12 @@ const AdminDashboard: React.FC<{ user: Profile; onLogout: () => void }> = ({ use
                   <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 px-4">Assigned Mission</label>
                   <select className="w-full bg-gray-50 border-2 border-gray-100 rounded-[32px] px-8 py-5 text-sm font-black outline-none focus:border-[#EF4E92] transition-all" value={selectedLessonId} onChange={e => setSelectedLessonId(e.target.value)}>
                     <option value="">Select a mission...</option>
-                    {lessons.filter(l => l.status === LessonStatus.PUBLISHED).map(l => (
-                      <option key={l.id} value={l.id}>{l.title}</option>
-                    ))}
+                    {lessons
+                      .filter(l => l.status === LessonStatus.PUBLISHED)
+                      .sort((a, b) => a.title.localeCompare(b.title, undefined, { numeric: true, sensitivity: 'base' }))
+                      .map(l => (
+                        <option key={l.id} value={l.id}>{l.title}</option>
+                      ))}
                   </select>
                 </div>
               </div>
