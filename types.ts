@@ -87,11 +87,10 @@ export interface LessonProgress {
   completed_at?: string;
 }
 
-// Added LessonSchedule interface
 export interface LessonSchedule {
   id: string;
   lesson_id: string;
-  scheduled_date: string;
+  date: string;
   created_at?: string;
   lesson?: Lesson;
 }

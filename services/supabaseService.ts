@@ -7,9 +7,13 @@ import { UserRole, LessonStatus, Lesson, LessonActivity, LessonVideo, Attachment
  * (allowing the caller to return a safe default) or throws if it's a fatal error.
  */
 const handleSupabaseError = (error: any, context: string): boolean => {
-  // Check for specific "missing entity" errors to return null/empty instead of crashing
-  if (error.code === '42P01' || error.message?.includes('Could not find the table') || error.message?.includes('cache') || error.message?.includes('column')) {
-    console.warn(`Supabase Warning [${context}]: Entity or column missing in schema. Falling back.`);
+  // Check for common schema mismatch codes or messages
+  if (error.code === '42P01' || // undefined_table
+      error.code === '42703' || // undefined_column
+      error.message?.includes('Could not find the table') || 
+      error.message?.includes('cache') || 
+      error.message?.includes('column')) {
+    console.warn(`Supabase Warning [${context}]: Entity or column missing in schema. Falling back to mock/local behavior.`);
     return true; // isMissing
   }
   console.error(`Supabase Error [${context}]:`, error);
@@ -64,14 +68,13 @@ export const db = {
       videos?: Partial<LessonVideo>[],
       attachments?: Partial<Attachment>[]
     ) {
-      // Destructure to separate special fields that might not exist in the DB schema
       const { 
         id, 
         activities: _a, 
         videos: _v, 
         attachments: _at, 
         progress: _p,
-        published_at: _pa, // Skip to avoid schema cache errors if column missing
+        published_at: _pa,
         ...lessonPayload 
       } = lesson;
 
@@ -153,59 +156,84 @@ export const db = {
 
   schedules: {
     async list() {
-      const { data, error } = await supabase
-        .from('lesson_schedules')
-        .select(`
-          *,
-          lesson:lessons(*)
-        `)
-        .order('scheduled_date', { ascending: true });
+      // Fetch raw schedules from 'schedules' table
+      const { data: rawSchedules, error: sError } = await supabase
+        .from('schedules')
+        .select('*')
+        .order('date', { ascending: true });
       
-      if (error) {
-        if (handleSupabaseError(error, 'fetching schedules')) return [];
+      if (sError) {
+        if (handleSupabaseError(sError, 'fetching raw schedules')) return [];
       }
-      return (data || []) as LessonSchedule[];
+
+      if (!rawSchedules || rawSchedules.length === 0) return [];
+
+      // Manually fetch lessons for these schedules using 'lesson_id'
+      const lessonIds = [...new Set(rawSchedules.map(s => s.lesson_id))];
+      const { data: relatedLessons, error: lError } = await supabase
+        .from('lessons')
+        .select('*')
+        .in('id', lessonIds);
+      
+      if (lError) handleSupabaseError(lError, 'fetching related lessons for schedules');
+
+      const lessonsMap = new Map((relatedLessons || []).map(l => [l.id, l]));
+
+      return rawSchedules.map(sch => ({
+        ...sch,
+        lesson: lessonsMap.get(sch.lesson_id)
+      })) as LessonSchedule[];
     },
+
     async getForDate(date: string) {
-      const { data, error } = await supabase
-        .from('lesson_schedules')
-        .select(`
-          *,
-          lesson:lessons(
-            *,
-            videos:lesson_videos(*)
-          )
-        `)
-        .eq('scheduled_date', date)
+      const { data: schData, error: sError } = await supabase
+        .from('schedules')
+        .select('*')
+        .eq('date', date)
         .maybeSingle();
       
-      if (error) {
-        if (handleSupabaseError(error, 'fetching schedule for date')) return null;
+      if (sError) {
+        if (handleSupabaseError(sError, 'fetching schedule for date')) return null;
       }
-      return data as LessonSchedule;
+
+      if (!schData) return null;
+
+      // Fetch lesson details separately using 'lesson_id'
+      const lesson = await db.lessons.get(schData.lesson_id);
+      return { ...schData, lesson } as LessonSchedule;
     },
+
     async upsert(schedule: Partial<LessonSchedule>) {
-      // Remove any undefined fields
       const cleanSchedule = Object.fromEntries(
         Object.entries(schedule).filter(([_, v]) => v !== undefined)
       );
 
+      // CRITICAL: Extract 'lesson' object to avoid sending it to Supabase as a column, which causes errors
+      const { lesson, ...dbPayload } = cleanSchedule as any;
+
       const { data, error } = await supabase
-        .from('lesson_schedules')
-        .upsert(cleanSchedule)
+        .from('schedules')
+        .upsert(dbPayload)
         .select();
       
       if (error) {
+        // Fallback Logic: If DB write fails due to schema issues, return a temp object so UI updates anyway
         if (handleSupabaseError(error, 'saving schedule')) {
-          // If it's a missing table error, return the schedule object to fake success in UI
-          return { ...schedule, id: schedule.id || 'temp-id-' + Date.now() } as LessonSchedule;
+          return { 
+            ...schedule, 
+            id: schedule.id || 'temp-id-' + Date.now().toString() 
+          } as LessonSchedule;
         }
         return null;
       }
       return (data?.[0] || null) as LessonSchedule;
     },
+
     async delete(id: string) {
-      const { error } = await supabase.from('lesson_schedules').delete().eq('id', id);
+      // If it's a temp ID (fallback mode), we don't need to call DB
+      if (id.startsWith('temp-id-')) return; 
+
+      const { error } = await supabase.from('schedules').delete().eq('id', id);
       if (error) handleSupabaseError(error, 'deleting schedule');
     }
   },

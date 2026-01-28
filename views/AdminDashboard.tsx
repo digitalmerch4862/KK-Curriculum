@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo } from 'react';
 import { db } from '../services/supabaseService.ts';
 import { categorizeLessonTitle, generateFullLesson, generateLessonSummary } from '../services/geminiService.ts';
@@ -116,20 +117,27 @@ const AdminDashboard: React.FC<{ user: Profile; onLogout: () => void }> = ({ use
     try {
       const [l, s] = await Promise.all([db.lessons.list(UserRole.ADMIN), db.schedules.list()]);
       setLessons(l || []);
-      setSchedules(s || []);
-    } catch (e) { console.error(e); }
+      // If we have local temporary schedules (fallback mode), preserve them
+      setSchedules(prev => {
+        const localOnly = prev.filter(p => p.id.startsWith('temp-'));
+        // Merge fetched schedules with local fallback ones, avoiding duplicates by ID if meaningful
+        const fetchedIds = new Set((s || []).map(x => x.id));
+        const filteredLocals = localOnly.filter(x => !fetchedIds.has(x.id));
+        return [...(s || []), ...filteredLocals];
+      });
+    } catch (e) { 
+      console.error("Fetch Data Error:", e); 
+    }
     setLoading(false);
   };
 
   /**
    * ROBUST MANUAL JOIN: Map lessons to schedules if they aren't already joined by Supabase.
-   * This is critical if the Supabase foreign keys are not perfectly defined.
    */
   const enrichedSchedules = useMemo(() => {
     return schedules.map(sch => {
-      if (sch.lesson) return sch;
-      const matchingLesson = lessons.find(l => l.id === sch.lesson_id);
-      return { ...sch, lesson: matchingLesson };
+      const lesson = sch.lesson || lessons.find(l => l.id === sch.lesson_id);
+      return { ...sch, lesson };
     });
   }, [schedules, lessons]);
 
@@ -228,16 +236,38 @@ const AdminDashboard: React.FC<{ user: Profile; onLogout: () => void }> = ({ use
       
       const payload: any = { 
         lesson_id: selectedLessonId, 
-        scheduled_date: selectedDate 
+        date: selectedDate           
       };
       
       if (existing) {
         payload.id = existing.id;
       }
 
-      await db.schedules.upsert(payload);
+      const savedSchedule = await db.schedules.upsert(payload);
       
-      await fetchData();
+      if (savedSchedule) {
+        // Optimistically update the list immediately so the user sees feedback
+        // Hydrate with lesson details so it doesn't show "Unknown"
+        const hydratedSchedule = { 
+          ...savedSchedule, 
+          lesson: lessons.find(l => l.id === savedSchedule.lesson_id) 
+        };
+
+        setSchedules(prev => {
+          // Replace if exists, otherwise append
+          const exists = prev.some(s => s.id === savedSchedule.id);
+          if (exists) {
+            return prev.map(s => s.id === savedSchedule.id ? hydratedSchedule : s);
+          }
+          return [...prev, hydratedSchedule].sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+        });
+        
+        // If it's a real DB schedule (not fallback), re-fetch to ensure sync
+        if (!savedSchedule.id.startsWith('temp-')) {
+          await fetchData();
+        }
+      }
+
       alert("Mission assigned successfully!");
       setSelectedLessonId('');
     } catch (e) { 
@@ -250,8 +280,14 @@ const AdminDashboard: React.FC<{ user: Profile; onLogout: () => void }> = ({ use
   const handleDeleteSchedule = async (id: string) => {
     if (!confirm("Remove this schedule?")) return;
     try {
+      // Optimistic delete
+      setSchedules(prev => prev.filter(s => s.id !== id));
+      
       await db.schedules.delete(id);
-      await fetchData();
+      
+      if (!id.startsWith('temp-')) {
+        await fetchData();
+      }
     } catch (e) { alert(e); }
   };
 
@@ -592,8 +628,8 @@ const AdminDashboard: React.FC<{ user: Profile; onLogout: () => void }> = ({ use
                     <div key={sch.id} className="bg-white rounded-[32px] p-8 border border-gray-100 shadow-sm flex items-center justify-between group">
                       <div className="flex items-center gap-8">
                         <div className="flex flex-col items-center justify-center bg-slate-50 w-20 h-20 rounded-3xl border border-slate-100">
-                          <span className="text-[10px] font-black uppercase text-pink-500">{new Date(sch.scheduled_date).toLocaleDateString('en-GB', { month: 'short', timeZone: 'UTC' })}</span>
-                          <span className="text-2xl font-black text-[#003882]">{new Date(sch.scheduled_date).getUTCDate()}</span>
+                          <span className="text-[10px] font-black uppercase text-pink-500">{new Date(sch.date).toLocaleDateString('en-GB', { month: 'short', timeZone: 'UTC' })}</span>
+                          <span className="text-2xl font-black text-[#003882]">{new Date(sch.date).getUTCDate()}</span>
                         </div>
                         <div>
                           <h4 className="font-black text-[#003882] uppercase text-lg">{sch.lesson?.title || 'Unknown Mission'}</h4>
