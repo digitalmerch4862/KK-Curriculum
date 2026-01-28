@@ -211,9 +211,11 @@ export const db = {
       // CRITICAL: Extract 'lesson' object to avoid sending it to Supabase as a column, which causes errors
       const { lesson, ...dbPayload } = cleanSchedule as any;
 
+      // Use onConflict: 'date' to ensure we update existing records for this date
+      // This requires a unique constraint on the 'date' column in your Supabase table.
       const { data, error } = await supabase
         .from('schedules')
-        .upsert(dbPayload)
+        .upsert(dbPayload, { onConflict: 'date' })
         .select();
       
       if (error) {

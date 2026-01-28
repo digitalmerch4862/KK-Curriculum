@@ -488,40 +488,29 @@ ${row.craft_ideas?.replace(/\|/g, '\n') || ''}`;
     if (!selectedLessonId) return alert("Select a mission");
     setLoading(true);
     try {
-      const existing = await db.schedules.getForDate(selectedDate);
-      
+      // Create payload without ID initially
       const payload: any = { 
         lesson_id: selectedLessonId, 
         date: selectedDate           
       };
       
-      if (existing) {
-        payload.id = existing.id;
+      // If we find an existing schedule locally, we can try to use its ID,
+      // but the service level upsert with onConflict is safer.
+      const existingLocal = schedules.find(s => s.date === selectedDate);
+      if (existingLocal) {
+        payload.id = existingLocal.id;
       }
 
       const savedSchedule = await db.schedules.upsert(payload);
       
       if (savedSchedule) {
-        const hydratedSchedule = { 
-          ...savedSchedule, 
-          lesson: lessons.find(l => l.id === savedSchedule.lesson_id) 
-        };
-
-        setSchedules(prev => {
-          const exists = prev.some(s => s.id === savedSchedule.id);
-          if (exists) {
-            return prev.map(s => s.id === savedSchedule.id ? hydratedSchedule : s);
-          }
-          return [...prev, hydratedSchedule].sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-        });
-        
-        if (!savedSchedule.id.startsWith('temp-')) {
-          await fetchData();
-        }
+        // Force a re-fetch to ensure the UI shows exactly what's in the DB
+        await fetchData();
+        alert("Mission assigned successfully!");
+        setSelectedLessonId('');
+      } else {
+        throw new Error("Failed to save schedule");
       }
-
-      alert("Mission assigned successfully!");
-      setSelectedLessonId('');
     } catch (e) { 
       console.error("Scheduling failed:", e);
       alert("Error: " + (e instanceof Error ? e.message : String(e))); 
