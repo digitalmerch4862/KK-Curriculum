@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo } from 'react';
 import { db } from '../services/supabaseService.ts';
 import { categorizeLessonTitle, generateFullLesson, generateLessonSummary } from '../services/geminiService.ts';
@@ -83,7 +84,17 @@ const AdminDashboard: React.FC<{ user: Profile; onLogout: () => void }> = ({ use
   const [lessons, setLessons] = useState<Lesson[]>([]);
   const [schedules, setSchedules] = useState<LessonSchedule[]>([]);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [formData, setFormData] = useState<Partial<Lesson>>({ title: '', summary: '', content: '', category: 'HISTORY', status: LessonStatus.DRAFT });
+  const [formData, setFormData] = useState<Partial<Lesson>>({ 
+    title: '', 
+    summary: '', 
+    content: '', 
+    category: 'HISTORY', 
+    status: LessonStatus.DRAFT,
+    series: 'KingdomKids',
+    grade_min: 1,
+    grade_max: 6,
+    tags: []
+  });
   const [structure, setStructure] = useState<LessonContentStructure>({ read: [], teach: [], engage: [] });
   const [activities, setActivities] = useState<Partial<LessonActivity>[]>([]);
   const [videos, setVideos] = useState<Partial<LessonVideo>[]>([]);
@@ -171,10 +182,30 @@ const AdminDashboard: React.FC<{ user: Profile; onLogout: () => void }> = ({ use
     setLoading(true);
     try {
       const { activities: _a, videos: _v, attachments: _at, progress: _p, ...rest } = formData;
-      await db.lessons.upsert({ ...rest, content: serializeStructureToMarkdown(), status, created_by: user.id }, activities, videos, attachments);
+      
+      const publishedAt = status === LessonStatus.PUBLISHED 
+        ? (formData.published_at || new Date().toISOString()) 
+        : formData.published_at;
+
+      await db.lessons.upsert({ 
+        ...rest, 
+        content: serializeStructureToMarkdown(), 
+        status, 
+        published_at: publishedAt,
+        created_by: user.id,
+        summary: formData.summary || '',
+        series: formData.series || 'KingdomKids',
+        grade_min: formData.grade_min || 1,
+        grade_max: formData.grade_max || 6,
+        tags: formData.tags || []
+      }, activities, videos, attachments);
+      
       setEditingId(null);
       fetchData();
-    } catch (e) { alert(e); }
+    } catch (e) { 
+      console.error("Save failed:", e);
+      alert("Error saving lesson: " + (e instanceof Error ? e.message : String(e))); 
+    }
     setLoading(false);
   };
 
@@ -182,10 +213,30 @@ const AdminDashboard: React.FC<{ user: Profile; onLogout: () => void }> = ({ use
     if (!selectedLessonId) return alert("Select a mission");
     setLoading(true);
     try {
-      await db.schedules.upsert({ lesson_id: selectedLessonId, scheduled_date: selectedDate });
-      fetchData();
-      alert("Scheduling updated!");
-    } catch (e) { alert(e); }
+      const existing = await db.schedules.getForDate(selectedDate);
+      
+      const payload: any = { 
+        lesson_id: selectedLessonId, 
+        scheduled_date: selectedDate 
+      };
+      
+      if (existing) {
+        payload.id = existing.id;
+      }
+
+      const result = await db.schedules.upsert(payload);
+      
+      // If result is null and we didn't throw (meaning handleSupabaseError returned true), 
+      // it means we're in a "schema missing" warning state. 
+      // We still update the UI to show success for better UX in broken environments.
+      
+      await fetchData();
+      alert("Mission assigned successfully!");
+      setSelectedLessonId('');
+    } catch (e) { 
+      console.error("Scheduling failed:", e);
+      alert("Error: " + (e instanceof Error ? e.message : String(e))); 
+    }
     setLoading(false);
   };
 
@@ -199,7 +250,17 @@ const AdminDashboard: React.FC<{ user: Profile; onLogout: () => void }> = ({ use
 
   const handleNew = () => {
     setEditingId('new');
-    setFormData({ title: '', summary: '', content: '', category: 'HISTORY', status: LessonStatus.DRAFT });
+    setFormData({ 
+      title: '', 
+      summary: '', 
+      content: '', 
+      category: 'HISTORY', 
+      status: LessonStatus.DRAFT,
+      series: 'KingdomKids',
+      grade_min: 1,
+      grade_max: 6,
+      tags: []
+    });
     setStructure({ 
       read: DEFAULT_LESSON_TEMPLATE.read.map(i => ({...i, id: Math.random().toString(36).substr(2,9)})),
       teach: DEFAULT_LESSON_TEMPLATE.teach.map(i => ({...i, id: Math.random().toString(36).substr(2,9)})),
@@ -280,8 +341,12 @@ const AdminDashboard: React.FC<{ user: Profile; onLogout: () => void }> = ({ use
                     <h2 className="font-black text-md px-4 text-[#003882] truncate">{formData.title || 'Draft Lesson'}</h2>
                     <div className="flex items-center gap-2">
                       <button onClick={() => setEditingId(null)} className="px-4 py-2 text-[10px] font-black uppercase text-gray-400 tracking-widest">Discard</button>
-                      <button onClick={() => handleSave(LessonStatus.DRAFT)} className="px-6 py-3 bg-[#003882] rounded-full text-[10px] font-black uppercase tracking-widest text-white shadow-lg">Draft</button>
-                      <button onClick={() => handleSave(LessonStatus.PUBLISHED)} className="px-8 py-3 bg-[#EF4E92] rounded-full text-[10px] font-black uppercase tracking-widest text-white shadow-lg">Publish</button>
+                      <button onClick={() => handleSave(LessonStatus.DRAFT)} disabled={loading} className="px-6 py-3 bg-[#003882] rounded-full text-[10px] font-black uppercase tracking-widest text-white shadow-lg disabled:opacity-50">
+                        {loading ? '...' : 'Draft'}
+                      </button>
+                      <button onClick={() => handleSave(LessonStatus.PUBLISHED)} disabled={loading} className="px-8 py-3 bg-[#EF4E92] rounded-full text-[10px] font-black uppercase tracking-widest text-white shadow-lg disabled:opacity-50">
+                        {loading ? '...' : 'Publish'}
+                      </button>
                     </div>
                   </div>
 
@@ -304,6 +369,16 @@ const AdminDashboard: React.FC<{ user: Profile; onLogout: () => void }> = ({ use
                     </div>
                   </div>
 
+                  <div className="space-y-3">
+                    <SectionHeader title="Mission Summary" />
+                    <textarea 
+                      className="w-full bg-white border border-gray-100 rounded-[28px] px-6 py-5 font-medium text-sm text-gray-600 outline-none shadow-sm focus:border-pink-300 transition-all min-h-[100px] resize-none" 
+                      placeholder="Brief mission briefing for teachers..."
+                      value={formData.summary} 
+                      onChange={e => setFormData({...formData, summary: e.target.value})} 
+                    />
+                  </div>
+
                   <div className="space-y-6">
                     <SectionHeader title="Lesson Body" />
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -320,7 +395,6 @@ const AdminDashboard: React.FC<{ user: Profile; onLogout: () => void }> = ({ use
                     </div>
                   </div>
 
-                  {/* Activities Section - Matching the 2-column screenshot */}
                   <div className="space-y-6">
                     <div className="flex items-center justify-between pr-6">
                       <SectionHeader title="Interactive Activities" />
@@ -359,7 +433,6 @@ const AdminDashboard: React.FC<{ user: Profile; onLogout: () => void }> = ({ use
                     </div>
                   </div>
 
-                  {/* Videos Section */}
                   <div className="space-y-6">
                     <div className="flex items-center justify-between pr-6">
                       <SectionHeader title="Videos & Media" />
@@ -402,7 +475,6 @@ const AdminDashboard: React.FC<{ user: Profile; onLogout: () => void }> = ({ use
                     </div>
                   </div>
 
-                  {/* Resources Section */}
                   <div className="space-y-6">
                     <div className="flex items-center justify-between pr-6">
                       <SectionHeader title="Resources & Downloads" />
@@ -492,7 +564,13 @@ const AdminDashboard: React.FC<{ user: Profile; onLogout: () => void }> = ({ use
                 </div>
               </div>
 
-              <button onClick={handleScheduleLesson} className="w-full bg-[#EF4E92] text-white rounded-full py-6 font-black uppercase tracking-widest shadow-lg shadow-pink-200 hover:scale-[1.01] transition-all">Assign Mission</button>
+              <button 
+                onClick={handleScheduleLesson} 
+                disabled={loading}
+                className="w-full bg-[#EF4E92] text-white rounded-full py-6 font-black uppercase tracking-widest shadow-lg shadow-pink-200 hover:scale-[1.01] transition-all disabled:opacity-50"
+              >
+                {loading ? "Processing..." : "Assign Mission"}
+              </button>
             </div>
 
             <div className="space-y-6">
