@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo } from 'react';
 import { db } from '../services/supabaseService.ts';
 import { categorizeLessonTitle, generateFullLesson, generateLessonSummary } from '../services/geminiService.ts';
@@ -222,7 +221,7 @@ const AdminDashboard: React.FC<{ user: Profile; onLogout: () => void }> = ({ use
         </div>
         <div className="flex bg-gray-100 p-1 rounded-full">
           <button onClick={() => setActiveTab('LESSONS')} className={`px-6 py-2 rounded-full text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === 'LESSONS' ? 'bg-[#003882] text-white shadow-md' : 'text-gray-400'}`}>Missions</button>
-          <button onClick={() => setActiveTab('SCHEDULE')} className={`px-6 py-2 rounded-full text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === 'SCHEDULE' ? 'bg-[#003882] text-white shadow-md' : 'text-gray-400'}`}>Manual Scheduling</button>
+          <button onClick={() => setActiveTab('SCHEDULE')} className={`px-6 py-2 rounded-full text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === 'SCHEDULE' ? 'bg-[#003882] text-white shadow-md' : 'text-gray-400'}`}>Scheduling</button>
         </div>
         <button onClick={onLogout} className="text-[10px] font-black uppercase text-[#EF4E92] tracking-widest">Logout</button>
       </header>
@@ -294,10 +293,11 @@ const AdminDashboard: React.FC<{ user: Profile; onLogout: () => void }> = ({ use
                     <div className="space-y-3">
                       <SectionHeader title="Classification" />
                       <select className="w-full bg-white border border-gray-100 rounded-[28px] px-6 py-5 text-xs font-black outline-none shadow-sm focus:border-pink-300" value={formData.category} onChange={e => setFormData({...formData, category: e.target.value})}>
+                        <option value="PENTATEUCH">PENTATEUCH</option>
                         <option value="HISTORY">HISTORY</option>
                         <option value="POETRY">POETRY</option>
-                        <option value="GOSPELS">THE GOSPELS</option>
                         <option value="THE PROPHETS">THE PROPHETS</option>
+                        <option value="THE GOSPELS">THE GOSPELS</option>
                         <option value="ACTS & EPISTLES">ACTS & EPISTLES</option>
                         <option value="REVELATION">REVELATION</option>
                       </select>
@@ -445,11 +445,11 @@ const AdminDashboard: React.FC<{ user: Profile; onLogout: () => void }> = ({ use
             </div>
           </div>
         ) : (
-          /* MANUAL SCHEDULING TAB */
+          /* SCHEDULING TAB */
           <div className="max-w-5xl mx-auto space-y-12 animate-in fade-in slide-in-from-bottom-6 duration-700">
             <div className="bg-white rounded-[64px] p-12 border border-gray-100 shadow-xl space-y-10">
               <div>
-                <h2 className="text-3xl font-black text-[#003882] tracking-tighter uppercase mb-4">Manual Scheduling</h2>
+                <h2 className="text-3xl font-black text-[#003882] tracking-tighter uppercase mb-4">Scheduling</h2>
                 <p className="text-slate-400 font-medium">Assign a specific lesson for upcoming dates. Teachers will only see the assigned mission for today starting at 01:00 AM (London Time).</p>
               </div>
 
