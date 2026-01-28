@@ -1,9 +1,9 @@
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { db } from '../services/supabaseService.ts';
 import { categorizeLessonTitle, generateFullLesson, generateLessonSummary } from '../services/geminiService.ts';
 import { Lesson, LessonStatus, UserRole, Profile, LessonActivity, LessonVideo, Attachment, LessonContentStructure, LessonSubSection, LessonSchedule } from '../types.ts';
-import { Search, Calendar, Clock, Trash2, Plus, Info, Video, Link, FileText, LayoutGrid } from 'lucide-react';
+import { Search, Calendar, Clock, Trash2, Plus, Info, Video, Link, FileText, LayoutGrid, UploadCloud, FileDown, X, CheckCircle, AlertCircle, Loader2 } from 'lucide-react';
 
 const SectionHeader: React.FC<{ title: string }> = ({ title }) => (
   <div className="flex items-center gap-3 mb-4 md:mb-6">
@@ -31,8 +31,16 @@ const SubSectionCard: React.FC<SubSectionCardProps> = ({
   const isPermanent = ['BIBLE TEXT', 'MEMORY VERSE', 'BIG PICTURE', 'TEACH THE STORY', 'GOSPEL CONNECTION', 'DISCUSSION', 'CRAFTS'].includes(sub.title.toUpperCase());
   const isBibleCard = sub.title.toUpperCase() === 'BIBLE TEXT' || sub.title.toUpperCase() === 'SCRIPTURE';
 
+  // If the content is short and looks like a reference, pre-fill the input
+  useEffect(() => {
+    if (isBibleCard && sub.content && sub.content.length < 50 && !bibleReference) {
+      setBibleReference(sub.content);
+    }
+  }, [sub.content, isBibleCard]);
+
   const fetchBibleText = async () => {
-    const sanitizedQuery = bibleReference.trim().replace(/–|—/g, '-').replace(/\s+/g, '+');
+    const query = bibleReference || sub.content; // Use input or current content if it acts as ref
+    const sanitizedQuery = query.trim().replace(/–|—/g, '-').replace(/\s+/g, '+');
     if (!sanitizedQuery) return alert("Please enter a reference");
 
     setIsFetching(true);
@@ -42,7 +50,7 @@ const SubSectionCard: React.FC<SubSectionCardProps> = ({
       const data = await res.json();
       if (data && data.text) onUpdate({ content: data.text.trim() });
     } catch (e) {
-      alert("Failed to fetch Bible text.");
+      alert("Failed to fetch Bible text. Check the reference format.");
     } finally {
       setIsFetching(false);
     }
@@ -79,6 +87,24 @@ const DEFAULT_LESSON_TEMPLATE: LessonContentStructure = {
   engage: [{ id: 'tpl-e1', title: 'DISCUSSION', content: '' }, { id: 'tpl-e2', title: 'CRAFTS', content: '' }]
 };
 
+// Updated CSV Interface matching the requested fields
+interface CSVRow {
+  mission_id?: string;
+  mission_name: string;
+  classification: string;
+  mission_summary: string;
+  bible_reference: string;
+  memory_verse: string;
+  big_picture: string;
+  teach_the_story: string;
+  gospel_connection: string;
+  discussion_questions: string;
+  craft_ideas: string;
+  activities: string; // Pipe delimited
+  video_urls: string; // Pipe delimited
+  resource_links: string; // Pipe delimited
+}
+
 const AdminDashboard: React.FC<{ user: Profile; onLogout: () => void }> = ({ user, onLogout }) => {
   const [activeTab, setActiveTab] = useState<'LESSONS' | 'SCHEDULE'>('LESSONS');
   const [lessons, setLessons] = useState<Lesson[]>([]);
@@ -103,6 +129,11 @@ const AdminDashboard: React.FC<{ user: Profile; onLogout: () => void }> = ({ use
   const [searchQuery, setSearchQuery] = useState('');
   const [scheduleSearchQuery, setScheduleSearchQuery] = useState('');
   const [isScheduleSearchOpen, setIsScheduleSearchOpen] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Import Preview State
+  const [importPreview, setImportPreview] = useState<CSVRow[] | null>(null);
+  const [isImporting, setIsImporting] = useState(false);
 
   // Scheduling State
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
@@ -117,10 +148,8 @@ const AdminDashboard: React.FC<{ user: Profile; onLogout: () => void }> = ({ use
     try {
       const [l, s] = await Promise.all([db.lessons.list(UserRole.ADMIN), db.schedules.list()]);
       setLessons(l || []);
-      // If we have local temporary schedules (fallback mode), preserve them
       setSchedules(prev => {
         const localOnly = prev.filter(p => p.id.startsWith('temp-'));
-        // Merge fetched schedules with local fallback ones, avoiding duplicates by ID if meaningful
         const fetchedIds = new Set((s || []).map(x => x.id));
         const filteredLocals = localOnly.filter(x => !fetchedIds.has(x.id));
         return [...(s || []), ...filteredLocals];
@@ -132,8 +161,235 @@ const AdminDashboard: React.FC<{ user: Profile; onLogout: () => void }> = ({ use
   };
 
   /**
-   * ROBUST MANUAL JOIN: Map lessons to schedules if they aren't already joined by Supabase.
+   * --------------------------------------------------------------------------
+   * CSV IMPORT / EXPORT LOGIC
+   * --------------------------------------------------------------------------
    */
+  
+  const handleDownloadTemplate = () => {
+    // Exact headers requested
+    const headers = [
+      'mission_id', 'mission_name', 'classification', 'mission_summary',
+      'bible_reference', 'memory_verse', 'big_picture', 'teach_the_story',
+      'gospel_connection', 'discussion_questions', 'craft_ideas',
+      'activities', 'video_urls', 'resource_links'
+    ];
+    
+    // Sample row with list examples
+    const sampleRow = [
+      '', // mission_id (empty for new)
+      'Noah and the Ark', 
+      'HISTORY', 
+      'God saves Noah from the flood.', 
+      'Genesis 6:1-9:17', 
+      'Noah found favor in the eyes of the Lord. - Genesis 6:8', 
+      'God keeps His promises.', 
+      'Tell the story of the flood...', 
+      'The Ark is a picture of Jesus saving us.', 
+      '1. Why did God send the flood?|2. How big was the ark?', 
+      'Animal Mask Craft|Paper Boat Race', 
+      'Animal Charades - Act out animals|Rainbow Relay - Run to colors', // Activities (Title - Desc)
+      'https://youtube.com/example1|https://vimeo.com/example2', // Videos
+      'Coloring Sheet - http://link.com/pdf|Parent Guide - http://link.com/doc' // Resources
+    ];
+
+    const csvContent = "data:text/csv;charset=utf-8," 
+      + headers.join(",") + "\n" 
+      + sampleRow.map(f => `"${String(f).replace(/"/g, '""')}"`).join(","); // Escape quotes
+    
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", "kingdom_kids_template.csv");
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const handleImportClick = () => {
+    if (fileInputRef.current) {
+      fileInputRef.current.value = ''; // Reset
+      fileInputRef.current.click();
+    }
+  };
+
+  const parseCSV = (text: string) => {
+    const lines = text.split('\n');
+    const headers = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, ''));
+    
+    // Validate Headers (Loose check to ensure basic structure)
+    const required = ['mission_name', 'classification', 'mission_summary'];
+    const missing = required.filter(r => !headers.includes(r));
+    
+    if (missing.length > 0) {
+      alert(`Invalid CSV Format. Missing headers: ${missing.join(', ')}`);
+      return;
+    }
+
+    const parsedRows: CSVRow[] = [];
+
+    for (let i = 1; i < lines.length; i++) {
+      if (!lines[i].trim()) continue;
+      
+      // Handle commas inside quotes
+      const matches = lines[i].match(/(".*?"|[^",\s]+)(?=\s*,|\s*$)/g);
+      
+      if (matches) {
+        const rowData: any = {};
+        matches.forEach((val, idx) => {
+          if (headers[idx]) {
+            // Remove wrapping quotes and unescape double quotes
+            rowData[headers[idx]] = val.replace(/^"|"$/g, '').replace(/""/g, '"').trim();
+          }
+        });
+        
+        if (rowData.mission_name) {
+          parsedRows.push(rowData as CSVRow);
+        }
+      }
+    }
+    
+    setImportPreview(parsedRows);
+  };
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const text = event.target?.result;
+      if (typeof text === 'string') {
+        parseCSV(text);
+      }
+    };
+    reader.readAsText(file);
+  };
+
+  const confirmImport = async () => {
+    if (!importPreview) return;
+    setIsImporting(true);
+    let successCount = 0;
+
+    try {
+      for (const row of importPreview) {
+        // --- 1. Construct Content Markdown ---
+        // This maps the CSV fields to the exact sections expected by the Admin UI parser
+        const contentMarkdown = 
+`# 1. Read
+
+## BIBLE TEXT
+${row.bible_reference || ''}
+
+## MEMORY VERSE
+${row.memory_verse || ''}
+
+# 2. Teach
+
+## BIG PICTURE
+${row.big_picture || ''}
+
+## TEACH THE STORY
+${row.teach_the_story || ''}
+
+## GOSPEL CONNECTION
+${row.gospel_connection || ''}
+
+# 3. Engage
+
+## DISCUSSION
+${row.discussion_questions?.replace(/\|/g, '\n') || ''}
+
+## CRAFTS
+${row.craft_ideas?.replace(/\|/g, '\n') || ''}`;
+
+        // --- 2. Parse Activities (Pipe delimited) ---
+        // Format: "Title - Instructions" OR just "Title"
+        const activitiesPayload: Partial<LessonActivity>[] = [];
+        if (row.activities) {
+          row.activities.split('|').forEach((actStr, idx) => {
+            if (actStr.trim()) {
+              const [title, inst] = actStr.split(' - ');
+              activitiesPayload.push({
+                title: title.trim(),
+                instructions: inst ? inst.trim() : 'See teacher guide for details.',
+                supplies: [],
+                duration_minutes: 15,
+                sort_order: idx
+              });
+            }
+          });
+        }
+
+        // --- 3. Parse Videos (Pipe delimited) ---
+        const videosPayload: Partial<LessonVideo>[] = [];
+        if (row.video_urls) {
+          row.video_urls.split('|').forEach((url, idx) => {
+            if (url.trim()) {
+              videosPayload.push({
+                title: `Video Resource ${idx + 1}`,
+                url: url.trim(),
+                provider: url.includes('vimeo') ? 'vimeo' : 'youtube',
+                sort_order: idx
+              });
+            }
+          });
+        }
+
+        // --- 4. Parse Resources (Pipe delimited) ---
+        // Format: "Name - URL"
+        const attachmentsPayload: Partial<Attachment>[] = [];
+        if (row.resource_links) {
+          row.resource_links.split('|').forEach((resStr) => {
+            if (resStr.trim()) {
+              const [name, url] = resStr.split(' - ');
+              if (url) {
+                attachmentsPayload.push({
+                  name: name.trim(),
+                  storage_path: url.trim(),
+                  type: 'pdf'
+                });
+              }
+            }
+          });
+        }
+
+        // --- 5. Main Lesson Payload ---
+        const missionPayload: Partial<Lesson> = {
+          id: (row.mission_id && row.mission_id.trim()) ? row.mission_id : undefined,
+          title: row.mission_name,
+          category: row.classification || 'HISTORY',
+          summary: row.mission_summary,
+          tags: [],
+          grade_min: 1,
+          grade_max: 6,
+          status: LessonStatus.PUBLISHED, // Import as published for immediate use, or change to DRAFT
+          content: contentMarkdown,
+          created_by: user.id
+        };
+
+        await db.lessons.upsert(missionPayload, activitiesPayload, videosPayload, attachmentsPayload);
+        successCount++;
+      }
+      
+      alert(`Success! Imported ${successCount} missions.`);
+      setImportPreview(null);
+      await fetchData();
+
+    } catch (e) {
+      console.error(e);
+      alert("Import failed. Check console for details.");
+    } finally {
+      setIsImporting(false);
+    }
+  };
+
+  /**
+   * --------------------------------------------------------------------------
+   * END CSV LOGIC
+   * --------------------------------------------------------------------------
+   */
+
   const enrichedSchedules = useMemo(() => {
     return schedules.map(sch => {
       const lesson = sch.lesson || lessons.find(l => l.id === sch.lesson_id);
@@ -246,15 +502,12 @@ const AdminDashboard: React.FC<{ user: Profile; onLogout: () => void }> = ({ use
       const savedSchedule = await db.schedules.upsert(payload);
       
       if (savedSchedule) {
-        // Optimistically update the list immediately so the user sees feedback
-        // Hydrate with lesson details so it doesn't show "Unknown"
         const hydratedSchedule = { 
           ...savedSchedule, 
           lesson: lessons.find(l => l.id === savedSchedule.lesson_id) 
         };
 
         setSchedules(prev => {
-          // Replace if exists, otherwise append
           const exists = prev.some(s => s.id === savedSchedule.id);
           if (exists) {
             return prev.map(s => s.id === savedSchedule.id ? hydratedSchedule : s);
@@ -262,7 +515,6 @@ const AdminDashboard: React.FC<{ user: Profile; onLogout: () => void }> = ({ use
           return [...prev, hydratedSchedule].sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime());
         });
         
-        // If it's a real DB schedule (not fallback), re-fetch to ensure sync
         if (!savedSchedule.id.startsWith('temp-')) {
           await fetchData();
         }
@@ -280,11 +532,8 @@ const AdminDashboard: React.FC<{ user: Profile; onLogout: () => void }> = ({ use
   const handleDeleteSchedule = async (id: string) => {
     if (!confirm("Remove this schedule?")) return;
     try {
-      // Optimistic delete
       setSchedules(prev => prev.filter(s => s.id !== id));
-      
       await db.schedules.delete(id);
-      
       if (!id.startsWith('temp-')) {
         await fetchData();
       }
@@ -330,11 +579,111 @@ const AdminDashboard: React.FC<{ user: Profile; onLogout: () => void }> = ({ use
         <button onClick={onLogout} className="text-[10px] font-black uppercase text-[#EF4E92] tracking-widest">Logout</button>
       </header>
 
+      {/* --- IMPORT PREVIEW MODAL --- */}
+      {importPreview && (
+        <div className="fixed inset-0 z-[100] bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-6">
+          <div className="bg-white w-full max-w-6xl max-h-[90vh] rounded-[40px] shadow-2xl flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
+            <div className="px-8 py-6 border-b border-gray-100 flex items-center justify-between bg-white sticky top-0 z-10">
+              <div className="flex items-center gap-4">
+                <div className="bg-pink-100 p-3 rounded-xl text-[#EF4E92]">
+                  <UploadCloud size={24} />
+                </div>
+                <div>
+                  <h3 className="font-black text-xl text-[#003882] uppercase tracking-tight">Import Preview</h3>
+                  <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Review {importPreview.length} missions before importing</p>
+                </div>
+              </div>
+              <button onClick={() => setImportPreview(null)} className="p-3 hover:bg-gray-100 rounded-full text-gray-400 transition-colors">
+                <X size={24} />
+              </button>
+            </div>
+            
+            <div className="flex-1 overflow-auto p-8">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="border-b border-gray-100">
+                    <th className="py-4 px-4 text-[10px] font-black uppercase tracking-widest text-gray-400">Status</th>
+                    <th className="py-4 px-4 text-[10px] font-black uppercase tracking-widest text-gray-400">Mission Name</th>
+                    <th className="py-4 px-4 text-[10px] font-black uppercase tracking-widest text-gray-400">Classification</th>
+                    <th className="py-4 px-4 text-[10px] font-black uppercase tracking-widest text-gray-400">Summary</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-50">
+                  {importPreview.map((row, idx) => (
+                    <tr key={idx} className="hover:bg-gray-50/50 transition-colors">
+                      <td className="py-4 px-4">
+                        {row.mission_id ? (
+                           <span className="bg-blue-100 text-blue-600 px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest">Update</span>
+                        ) : (
+                           <span className="bg-green-100 text-green-600 px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest">New</span>
+                        )}
+                      </td>
+                      <td className="py-4 px-4 font-bold text-gray-800">{row.mission_name}</td>
+                      <td className="py-4 px-4 text-xs font-medium text-gray-500">{row.classification}</td>
+                      <td className="py-4 px-4 text-xs font-medium text-gray-500 truncate max-w-xs">{row.mission_summary}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="p-8 border-t border-gray-100 bg-gray-50 flex items-center justify-end gap-4">
+              <button 
+                onClick={() => setImportPreview(null)}
+                className="px-6 py-3 text-[10px] font-black uppercase tracking-widest text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                Cancel
+              </button>
+              <button 
+                onClick={confirmImport}
+                disabled={isImporting}
+                className="bg-[#EF4E92] text-white px-8 py-3 rounded-full text-[10px] font-black uppercase tracking-widest shadow-lg hover:bg-[#d83a7c] transition-all flex items-center gap-2 disabled:opacity-50"
+              >
+                {isImporting ? <Loader2 className="animate-spin" size={16} /> : <CheckCircle size={16} />}
+                {isImporting ? 'Processing...' : 'Confirm Import'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <main className="max-w-[1600px] mx-auto p-6 md:p-8">
         {activeTab === 'LESSONS' ? (
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-10">
             {/* Sidebar List */}
             <div className={`lg:col-span-3 space-y-6 ${editingId ? 'hidden lg:block' : 'block'}`}>
+              
+              {/* Admin Actions Bar */}
+              <div className="bg-white p-4 rounded-[28px] border border-gray-100 shadow-sm space-y-3">
+                <div className="flex items-center gap-2 mb-2">
+                   <div className="bg-pink-50 p-1.5 rounded-lg text-[#EF4E92]"><Info size={14} /></div>
+                   <span className="text-[9px] font-black uppercase tracking-widest text-gray-400">Admin Actions</span>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <input 
+                    type="file" 
+                    accept=".csv" 
+                    ref={fileInputRef} 
+                    className="hidden" 
+                    onChange={handleFileUpload}
+                  />
+                  <button 
+                    onClick={handleImportClick}
+                    className="bg-gradient-to-r from-[#FF4B91] to-[#FF80B5] text-white py-3 rounded-2xl shadow-md hover:shadow-lg hover:scale-[1.02] transition-all flex flex-col items-center justify-center gap-1 group active:scale-95"
+                  >
+                      <UploadCloud size={20} className="group-hover:animate-bounce" />
+                      <span className="text-[8px] font-black uppercase tracking-widest">Upload CSV</span>
+                  </button>
+                  <button 
+                    onClick={handleDownloadTemplate}
+                    className="bg-white border-2 border-[#003882]/10 text-[#003882] py-3 rounded-2xl hover:bg-blue-50 transition-all active:scale-95 shadow-sm flex flex-col items-center justify-center gap-1"
+                  >
+                      <FileDown size={20} />
+                      <span className="text-[8px] font-black uppercase tracking-widest">Template</span>
+                  </button>
+                </div>
+              </div>
+
               <div className="flex items-center justify-between">
                 <h2 className="font-black text-2xl tracking-tighter text-[#003882]">Missions</h2>
                 <button onClick={handleNew} className="bg-[#EF4E92] text-white px-5 py-2.5 rounded-full text-[10px] font-black uppercase tracking-widest shadow-xl">+ NEW</button>
