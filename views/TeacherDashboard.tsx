@@ -4,7 +4,7 @@ import { db } from '../services/supabaseService.ts';
 import { Lesson, UserRole, Profile, LessonContentStructure, LessonVideo, Attachment } from '../types.ts';
 import { 
   X, ArrowLeft, ChevronRight, ChevronLeft, Menu, Download, FileText, Play, Eye, Search, BookOpen, GraduationCap, Users, CheckCircle2,
-  LayoutGrid, Book, History, Music, ScrollText, Cross, Send, Globe, LogOut, Video
+  LayoutGrid, Book, History, Music, ScrollText, Cross, Send, Globe, LogOut, Video, ArrowUpDown, Check
 } from 'lucide-react';
 import TTSController from '../components/TTSController.tsx';
 
@@ -20,6 +20,10 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
   const [categoryFilter, setCategoryFilter] = useState('ALL MISSIONS');
   const [loading, setLoading] = useState(true);
   
+  // Sorting State
+  const [sortOrder, setSortOrder] = useState<'newest' | 'alpha_asc' | 'alpha_desc'>('newest');
+  const [isSortMenuOpen, setIsSortMenuOpen] = useState(false);
+
   // Carousel State
   const [activeIndex, setActiveIndex] = useState(0);
 
@@ -59,16 +63,32 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
   };
 
   const filteredLessons = useMemo(() => {
-    return lessons.filter(l => 
+    let result = lessons.filter(l => 
       l.title.toLowerCase().includes(searchTerm.toLowerCase()) && 
       (categoryFilter === 'ALL MISSIONS' || l.category === categoryFilter)
     );
-  }, [lessons, searchTerm, categoryFilter]);
+
+    // Apply Sorting
+    result.sort((a, b) => {
+      if (sortOrder === 'alpha_asc') {
+        return a.title.localeCompare(b.title);
+      } else if (sortOrder === 'alpha_desc') {
+        return b.title.localeCompare(a.title);
+      } else {
+        // Default: Newest first (using updated_at or published_at)
+        const dateA = new Date(a.updated_at || 0).getTime();
+        const dateB = new Date(b.updated_at || 0).getTime();
+        return dateB - dateA;
+      }
+    });
+
+    return result;
+  }, [lessons, searchTerm, categoryFilter, sortOrder]);
 
   // Reset active index when filter changes
   useEffect(() => {
     setActiveIndex(0);
-  }, [categoryFilter, searchTerm]);
+  }, [categoryFilter, searchTerm, sortOrder]);
 
   const handleNext = () => {
     if (activeIndex < filteredLessons.length - 1) {
@@ -284,6 +304,42 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
 
           {/* Utilities */}
           <div className="flex items-center gap-3 pointer-events-auto">
+             {/* Sort Dropdown */}
+             <div className="relative">
+               <button 
+                 onClick={() => setIsSortMenuOpen(!isSortMenuOpen)}
+                 className="bg-white/90 backdrop-blur-md p-3 rounded-full shadow-lg border border-slate-100 hover:bg-slate-50 text-slate-400 hover:text-[#EF4E92] transition-colors"
+                 title="Sort Missions"
+               >
+                 <ArrowUpDown size={18} />
+               </button>
+               {isSortMenuOpen && (
+                 <div className="absolute top-full right-0 mt-2 w-48 bg-white/95 backdrop-blur-xl rounded-2xl shadow-2xl border border-slate-100 p-2 flex flex-col gap-1 z-[60] animate-in fade-in zoom-in-95 duration-200">
+                    <button 
+                      onClick={() => { setSortOrder('newest'); setIsSortMenuOpen(false); }}
+                      className={`px-4 py-3 text-left text-[10px] font-black uppercase tracking-widest rounded-xl transition-all flex items-center justify-between ${sortOrder === 'newest' ? 'bg-pink-50 text-[#EF4E92]' : 'text-slate-400 hover:bg-slate-50'}`}
+                    >
+                      <span>Newest First</span>
+                      {sortOrder === 'newest' && <Check size={12} />}
+                    </button>
+                    <button 
+                      onClick={() => { setSortOrder('alpha_asc'); setIsSortMenuOpen(false); }}
+                      className={`px-4 py-3 text-left text-[10px] font-black uppercase tracking-widest rounded-xl transition-all flex items-center justify-between ${sortOrder === 'alpha_asc' ? 'bg-pink-50 text-[#EF4E92]' : 'text-slate-400 hover:bg-slate-50'}`}
+                    >
+                      <span>Title (A-Z)</span>
+                      {sortOrder === 'alpha_asc' && <Check size={12} />}
+                    </button>
+                    <button 
+                      onClick={() => { setSortOrder('alpha_desc'); setIsSortMenuOpen(false); }}
+                      className={`px-4 py-3 text-left text-[10px] font-black uppercase tracking-widest rounded-xl transition-all flex items-center justify-between ${sortOrder === 'alpha_desc' ? 'bg-pink-50 text-[#EF4E92]' : 'text-slate-400 hover:bg-slate-50'}`}
+                    >
+                      <span>Title (Z-A)</span>
+                      {sortOrder === 'alpha_desc' && <Check size={12} />}
+                    </button>
+                 </div>
+               )}
+             </div>
+
              <div className="hidden sm:flex bg-white/90 backdrop-blur-md px-4 py-2.5 rounded-full shadow-lg border border-slate-100 items-center gap-2 w-48 transition-all focus-within:w-64 focus-within:ring-2 ring-[#EF4E92]">
                 <Search size={14} className="text-slate-400" />
                 <input 
