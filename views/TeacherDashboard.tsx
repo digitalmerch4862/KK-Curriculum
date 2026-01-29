@@ -1,10 +1,10 @@
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { db } from '../services/supabaseService.ts';
 import { Lesson, UserRole, Profile, LessonContentStructure, LessonVideo, Attachment } from '../types.ts';
 import { 
-  X, ArrowLeft, ChevronRight, Menu, Download, FileText, Play, Eye, Search, BookOpen, GraduationCap, Users, CheckCircle2,
-  LayoutGrid, Book, History, Music, ScrollText, Cross, Send, Globe, LogOut, Video
+  X, ArrowLeft, ChevronRight, ChevronLeft, Menu, Download, FileText, Play, Eye, Search, BookOpen, GraduationCap, Users, CheckCircle2,
+  LayoutGrid, Book, History, Music, ScrollText, Cross, Send, Globe, LogOut, Video, ArrowUpDown, Check
 } from 'lucide-react';
 import TTSController from '../components/TTSController.tsx';
 
@@ -20,8 +20,14 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
   const [categoryFilter, setCategoryFilter] = useState('ALL MISSIONS');
   const [loading, setLoading] = useState(true);
   
+  // Sorting State
+  const [sortOrder, setSortOrder] = useState<'newest' | 'alpha_asc' | 'alpha_desc'>('newest');
+  const [isSortMenuOpen, setIsSortMenuOpen] = useState(false);
+
+  // Carousel State
+  const [activeIndex, setActiveIndex] = useState(0);
+
   const [isNavExpanded, setIsNavExpanded] = useState(false);
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [activeVideo, setActiveVideo] = useState<LessonVideo | null>(null);
   const [viewingResource, setViewingResource] = useState<Attachment | null>(null);
 
@@ -33,6 +39,17 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
     fetchLessons();
   }, []);
 
+  // Keyboard navigation for carousel
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (selectedLesson) return; // Don't navigate carousel if inside a lesson
+      if (e.key === 'ArrowLeft') handlePrev();
+      if (e.key === 'ArrowRight') handleNext();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [activeIndex, selectedLesson]);
+
   const fetchLessons = async () => {
     setLoading(true);
     try {
@@ -42,6 +59,46 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
       console.error("Error fetching data", e); 
     } finally { 
       setLoading(false); 
+    }
+  };
+
+  const filteredLessons = useMemo(() => {
+    let result = lessons.filter(l => 
+      l.title.toLowerCase().includes(searchTerm.toLowerCase()) && 
+      (categoryFilter === 'ALL MISSIONS' || l.category === categoryFilter)
+    );
+
+    // Apply Sorting
+    result.sort((a, b) => {
+      if (sortOrder === 'alpha_asc') {
+        return a.title.localeCompare(b.title);
+      } else if (sortOrder === 'alpha_desc') {
+        return b.title.localeCompare(a.title);
+      } else {
+        // Default: Newest first (using updated_at or published_at)
+        const dateA = new Date(a.updated_at || 0).getTime();
+        const dateB = new Date(b.updated_at || 0).getTime();
+        return dateB - dateA;
+      }
+    });
+
+    return result;
+  }, [lessons, searchTerm, categoryFilter, sortOrder]);
+
+  // Reset active index when filter changes
+  useEffect(() => {
+    setActiveIndex(0);
+  }, [categoryFilter, searchTerm, sortOrder]);
+
+  const handleNext = () => {
+    if (activeIndex < filteredLessons.length - 1) {
+      setActiveIndex(prev => prev + 1);
+    }
+  };
+
+  const handlePrev = () => {
+    if (activeIndex > 0) {
+      setActiveIndex(prev => prev - 1);
     }
   };
 
@@ -69,7 +126,6 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
       const full = await db.lessons.get(id);
       setSelectedLesson(full);
       setIsNavExpanded(false);
-      setIsMobileMenuOpen(false);
       window.scrollTo({ top: 0, behavior: 'smooth' });
     } catch (e) { 
       alert("Error loading lesson details."); 
@@ -144,20 +200,15 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
     setViewingResource(att);
   };
 
-  const filteredLessons = lessons.filter(l => 
-    l.title.toLowerCase().includes(searchTerm.toLowerCase()) && 
-    (categoryFilter === 'ALL MISSIONS' || l.category === categoryFilter)
-  );
-
   const categories = [
-    { name: 'ALL MISSIONS', icon: <LayoutGrid size={18} /> },
-    { name: 'PENTATEUCH', icon: <Book size={18} /> },
-    { name: 'HISTORY', icon: <History size={18} /> },
-    { name: 'POETRY', icon: <Music size={18} /> },
-    { name: 'THE PROPHETS', icon: <ScrollText size={18} /> },
-    { name: 'THE GOSPELS', icon: <Cross size={18} /> },
-    { name: 'ACTS & EPISTLES', icon: <Send size={18} /> },
-    { name: 'REVELATION', icon: <Globe size={18} /> }
+    { name: 'ALL MISSIONS', icon: <LayoutGrid size={16} /> },
+    { name: 'PENTATEUCH', icon: <Book size={16} /> },
+    { name: 'HISTORY', icon: <History size={16} /> },
+    { name: 'POETRY', icon: <Music size={16} /> },
+    { name: 'THE PROPHETS', icon: <ScrollText size={16} /> },
+    { name: 'THE GOSPELS', icon: <Cross size={16} /> },
+    { name: 'ACTS & EPISTLES', icon: <Send size={16} /> },
+    { name: 'REVELATION', icon: <Globe size={16} /> }
   ];
 
   const lessonStructure = selectedLesson ? parseMarkdownToStructure(selectedLesson.content || '') : null;
@@ -172,7 +223,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
   }, [lessonStructure]);
 
   return (
-    <div className="min-h-screen bg-[#F4F7FA] text-slate-900 font-sans selection:bg-pink-100 flex flex-col md:flex-row overflow-x-hidden">
+    <div className="min-h-screen bg-slate-50 text-slate-900 font-sans selection:bg-pink-100 flex flex-col overflow-hidden">
       
       {/* --- VIDEOKE CONTROL --- */}
       {selectedLesson && (
@@ -221,168 +272,240 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
         </div>
       )}
 
-      {/* --- SIDEBAR NAVIGATION --- */}
+      {/* --- FLOATING HEADER (Replaces Sidebar) --- */}
       {!selectedLesson && (
-        <>
-          {/* Mobile Backdrop */}
-          {isMobileMenuOpen && (
-            <div 
-              className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-40 md:hidden animate-in fade-in duration-300" 
-              onClick={() => setIsMobileMenuOpen(false)}
-            />
-          )}
+        <header className="fixed top-0 left-0 right-0 z-50 px-6 py-4 flex items-center justify-between pointer-events-none">
+          {/* Brand */}
+          <div className="bg-white/90 backdrop-blur-md px-5 py-3 rounded-full shadow-lg border border-slate-100 pointer-events-auto flex items-center gap-3">
+             <div className="bg-[#EF4E92] w-8 h-8 rounded-full flex items-center justify-center font-black text-white text-xs shadow-md">K</div>
+             <div>
+               <h1 className="text-sm font-black text-[#003882] uppercase tracking-tighter leading-none">Kingdom Kids</h1>
+               <p className="text-[9px] text-slate-400 font-bold tracking-widest uppercase">Mission Control</p>
+             </div>
+          </div>
 
-          <aside className={`
-            fixed md:relative w-[280px] md:w-72 bg-white border-r border-slate-200 flex flex-col h-full md:h-screen overflow-y-auto z-50 transition-transform duration-300 ease-in-out
-            ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}
-          `}>
-            <div className="p-8 border-b border-slate-100 mb-6 flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="bg-[#EF4E92] w-10 h-10 rounded-xl flex items-center justify-center font-black text-white shadow-lg">K</div>
-                <span className="font-black text-xl tracking-tighter text-[#003882] uppercase">Mission Control</span>
-              </div>
-              <button onClick={() => setIsMobileMenuOpen(false)} className="md:hidden p-2 text-slate-300 hover:text-slate-600 transition-colors">
-                <X size={20} />
-              </button>
-            </div>
-
-            <nav className="flex-1 px-4 space-y-1">
-              {categories.map((cat) => (
-                <button
-                  key={cat.name}
-                  onClick={() => {
-                    setCategoryFilter(cat.name);
-                    setIsMobileMenuOpen(false);
-                  }}
-                  className={`w-full flex items-center gap-4 px-5 py-4 rounded-2xl transition-all font-black text-[11px] uppercase tracking-widest ${
-                    categoryFilter === cat.name 
-                    ? 'bg-[#003882] text-white shadow-xl shadow-blue-100' 
-                    : 'text-slate-400 hover:bg-slate-50 hover:text-slate-600'
-                  }`}
-                >
-                  <span className={categoryFilter === cat.name ? 'text-[#EF4E92]' : 'text-slate-300'}>{cat.icon}</span>
-                  {cat.name}
-                </button>
-              ))}
-            </nav>
-
-            <div className="p-8 border-t border-slate-100 mt-6">
-              <button onClick={onLogout} className="w-full text-[10px] font-black uppercase text-slate-400 hover:text-red-500 tracking-widest flex items-center gap-3 py-3 px-5 rounded-2xl hover:bg-red-50 transition-all">
-                <LogOut size={16} /> LOGOUT
-              </button>
-            </div>
-          </aside>
-        </>
-      )}
-
-      {/* --- MAIN CONTENT AREA --- */}
-      <main className="flex-1 min-w-0 h-full overflow-y-auto">
-        {!selectedLesson ? (
-          <div className="p-5 sm:p-8 md:p-12 animate-in fade-in duration-700">
-            {/* Mobile Header Toggle */}
-            <div className="md:hidden flex items-center justify-between mb-8">
-              <div className="flex items-center gap-3">
-                <div className="bg-[#EF4E92] w-8 h-8 rounded-lg flex items-center justify-center font-black text-white text-xs">K</div>
-                <span className="font-black text-[#003882] uppercase text-sm tracking-tighter">Mission Control</span>
-              </div>
-              <button 
-                onClick={() => setIsMobileMenuOpen(true)} 
-                className="p-2.5 bg-white rounded-xl shadow-sm border border-slate-100 active:scale-95 transition-transform"
+          {/* Navigation Pills */}
+          <div className="hidden md:flex bg-white/90 backdrop-blur-md px-2 py-2 rounded-full shadow-lg border border-slate-100 pointer-events-auto items-center gap-1 max-w-2xl overflow-x-auto scrollbar-hide">
+            {categories.map((cat) => (
+              <button
+                key={cat.name}
+                onClick={() => setCategoryFilter(cat.name)}
+                className={`flex items-center gap-2 px-4 py-2 rounded-full transition-all text-[10px] font-black uppercase tracking-widest whitespace-nowrap ${
+                  categoryFilter === cat.name 
+                  ? 'bg-[#003882] text-white shadow-md' 
+                  : 'text-slate-400 hover:bg-slate-50 hover:text-slate-600'
+                }`}
               >
-                <Menu size={20} />
+                <span className={categoryFilter === cat.name ? 'text-[#EF4E92]' : 'opacity-50'}>{cat.icon}</span>
+                {cat.name}
               </button>
-            </div>
+            ))}
+          </div>
 
-            <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-6 mb-12">
-              <div>
-                <h1 className="text-3xl sm:text-4xl md:text-5xl font-black text-[#003882] tracking-tighter uppercase mb-2">
-                  {categoryFilter}
-                </h1>
-                <p className="text-slate-400 font-medium text-sm sm:text-base">Equip yourself with biblical truth for the next generation.</p>
-              </div>
-              <div className="relative w-full xl:w-80">
-                <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300" size={18} />
+          {/* Utilities */}
+          <div className="flex items-center gap-3 pointer-events-auto">
+             {/* Sort Dropdown */}
+             <div className="relative">
+               <button 
+                 onClick={() => setIsSortMenuOpen(!isSortMenuOpen)}
+                 className="bg-white/90 backdrop-blur-md p-3 rounded-full shadow-lg border border-slate-100 hover:bg-slate-50 text-slate-400 hover:text-[#EF4E92] transition-colors"
+                 title="Sort Missions"
+               >
+                 <ArrowUpDown size={18} />
+               </button>
+               {isSortMenuOpen && (
+                 <div className="absolute top-full right-0 mt-2 w-48 bg-white/95 backdrop-blur-xl rounded-2xl shadow-2xl border border-slate-100 p-2 flex flex-col gap-1 z-[60] animate-in fade-in zoom-in-95 duration-200">
+                    <button 
+                      onClick={() => { setSortOrder('newest'); setIsSortMenuOpen(false); }}
+                      className={`px-4 py-3 text-left text-[10px] font-black uppercase tracking-widest rounded-xl transition-all flex items-center justify-between ${sortOrder === 'newest' ? 'bg-pink-50 text-[#EF4E92]' : 'text-slate-400 hover:bg-slate-50'}`}
+                    >
+                      <span>Newest First</span>
+                      {sortOrder === 'newest' && <Check size={12} />}
+                    </button>
+                    <button 
+                      onClick={() => { setSortOrder('alpha_asc'); setIsSortMenuOpen(false); }}
+                      className={`px-4 py-3 text-left text-[10px] font-black uppercase tracking-widest rounded-xl transition-all flex items-center justify-between ${sortOrder === 'alpha_asc' ? 'bg-pink-50 text-[#EF4E92]' : 'text-slate-400 hover:bg-slate-50'}`}
+                    >
+                      <span>Title (A-Z)</span>
+                      {sortOrder === 'alpha_asc' && <Check size={12} />}
+                    </button>
+                    <button 
+                      onClick={() => { setSortOrder('alpha_desc'); setIsSortMenuOpen(false); }}
+                      className={`px-4 py-3 text-left text-[10px] font-black uppercase tracking-widest rounded-xl transition-all flex items-center justify-between ${sortOrder === 'alpha_desc' ? 'bg-pink-50 text-[#EF4E92]' : 'text-slate-400 hover:bg-slate-50'}`}
+                    >
+                      <span>Title (Z-A)</span>
+                      {sortOrder === 'alpha_desc' && <Check size={12} />}
+                    </button>
+                 </div>
+               )}
+             </div>
+
+             <div className="hidden sm:flex bg-white/90 backdrop-blur-md px-4 py-2.5 rounded-full shadow-lg border border-slate-100 items-center gap-2 w-48 transition-all focus-within:w-64 focus-within:ring-2 ring-[#EF4E92]">
+                <Search size={14} className="text-slate-400" />
                 <input 
                   type="text" 
-                  placeholder="Find a mission..." 
-                  className="w-full pl-12 pr-6 py-4 bg-white border border-slate-100 rounded-2xl text-sm outline-none focus:ring-2 focus:ring-[#EF4E92] transition-all shadow-sm"
+                  placeholder="SEARCH MISSIONS..." 
+                  className="bg-transparent border-none outline-none text-[10px] font-bold text-slate-700 w-full placeholder:text-slate-300 uppercase tracking-wider"
                   value={searchTerm}
                   onChange={e => setSearchTerm(e.target.value)}
                 />
-              </div>
+             </div>
+             <button onClick={onLogout} className="bg-white/90 backdrop-blur-md p-3 rounded-full shadow-lg border border-slate-100 hover:bg-red-50 hover:text-red-500 text-slate-400 transition-colors">
+               <LogOut size={18} />
+             </button>
+          </div>
+        </header>
+      )}
+
+      {/* --- MAIN CONTENT AREA --- */}
+      <main className="flex-1 w-full h-screen relative overflow-hidden flex flex-col">
+        {!selectedLesson ? (
+          <div className="flex-1 relative flex items-center justify-center bg-gradient-to-br from-slate-50 via-blue-50/30 to-slate-100">
+            {/* Background Decor */}
+            <div className="absolute inset-0 overflow-hidden pointer-events-none opacity-30">
+              <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-[#EF4E92] rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-blob"></div>
+              <div className="absolute top-1/3 right-1/4 w-96 h-96 bg-[#003882] rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-blob animation-delay-2000"></div>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 gap-6 sm:gap-8">
-              {loading ? (
-                Array(6).fill(0).map((_, i) => <div key={i} className="bg-white/50 h-80 rounded-[48px] animate-pulse"></div>)
-              ) : (
-                filteredLessons.map(lesson => {
-                  const thumb = getVideoThumbnail(lesson.videos);
-                  const catIcon = categories.find(c => c.name === lesson.category)?.icon || <Video size={32} />;
+            {/* Mobile Category Select (Visible only on small screens) */}
+            <div className="md:hidden absolute top-24 left-0 right-0 px-6 z-30">
+              <select 
+                className="w-full bg-white/80 backdrop-blur border border-white shadow-lg rounded-2xl p-4 text-xs font-black text-[#003882] uppercase outline-none"
+                value={categoryFilter}
+                onChange={(e) => setCategoryFilter(e.target.value)}
+              >
+                {categories.map(c => <option key={c.name} value={c.name}>{c.name}</option>)}
+              </select>
+            </div>
 
-                  return (
-                    <div 
-                      key={lesson.id} 
-                      onClick={() => handleViewLesson(lesson.id)} 
-                      className="group bg-white rounded-[40px] border border-slate-50 shadow-sm hover:shadow-2xl hover:scale-[1.02] transition-all cursor-pointer flex flex-col overflow-hidden min-h-[420px] sm:min-h-[460px]"
-                    >
-                      {/* Thumbnail Stage */}
-                      <div className="h-44 sm:h-52 md:h-56 relative overflow-hidden bg-slate-100">
-                        {thumb ? (
-                          <img 
-                            src={thumb} 
-                            alt={lesson.title} 
-                            className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" 
-                          />
-                        ) : (
-                          <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-[#003882] to-[#EF4E92]/20 text-white/20">
-                            {React.cloneElement(catIcon as React.ReactElement<any>, { size: 64, strokeWidth: 1 })}
-                          </div>
-                        )}
-                        <div className="absolute inset-0 bg-gradient-to-t from-slate-900/60 to-transparent opacity-0 sm:group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                          <div className="w-14 h-14 sm:w-16 sm:h-16 bg-white/20 backdrop-blur-md rounded-full flex items-center justify-center text-white">
-                            <Play fill="currentColor" size={24} />
-                          </div>
-                        </div>
-                        <span className="absolute top-4 left-4 bg-[#EF4E92] text-white px-3 py-1 rounded-full text-[8px] font-black uppercase tracking-widest shadow-lg">
-                          {lesson.category}
-                        </span>
-                      </div>
+            {/* 3D CAROUSEL STAGE */}
+            {loading ? (
+               <div className="flex flex-col items-center gap-4 animate-pulse">
+                 <div className="w-12 h-12 border-4 border-[#EF4E92] border-t-transparent rounded-full animate-spin"></div>
+                 <span className="text-[10px] font-black uppercase tracking-[0.3em] text-[#003882]">Loading Missions...</span>
+               </div>
+            ) : filteredLessons.length === 0 ? (
+              <div className="text-center p-8 bg-white/50 backdrop-blur-sm rounded-[48px] border-2 border-dashed border-slate-200">
+                 <p className="font-black uppercase tracking-widest text-slate-400 text-[10px]">No active missions found in this sector.</p>
+                 <button onClick={() => {setCategoryFilter('ALL MISSIONS'); setSearchTerm('');}} className="mt-4 text-[#EF4E92] text-xs font-bold underline">Reset Filters</button>
+              </div>
+            ) : (
+              <div className="relative w-full max-w-[1400px] h-[600px] flex items-center justify-center perspective-[1200px] group/stage">
+                
+                {/* Navigation Arrows */}
+                <button 
+                  onClick={handlePrev}
+                  disabled={activeIndex === 0}
+                  className="absolute left-4 md:left-10 z-40 p-4 rounded-full bg-white/80 backdrop-blur-md shadow-xl text-[#003882] disabled:opacity-30 disabled:cursor-not-allowed hover:scale-110 active:scale-95 transition-all border border-white"
+                >
+                  <ChevronLeft size={32} strokeWidth={3} />
+                </button>
+                <button 
+                  onClick={handleNext}
+                  disabled={activeIndex === filteredLessons.length - 1}
+                  className="absolute right-4 md:right-10 z-40 p-4 rounded-full bg-white/80 backdrop-blur-md shadow-xl text-[#003882] disabled:opacity-30 disabled:cursor-not-allowed hover:scale-110 active:scale-95 transition-all border border-white"
+                >
+                  <ChevronRight size={32} strokeWidth={3} />
+                </button>
 
-                      {/* Info Stage */}
-                      <div className="p-6 sm:p-8 flex flex-col flex-1">
-                        <h2 className="text-lg sm:text-xl font-black text-[#003882] mb-3 group-hover:text-[#EF4E92] leading-tight line-clamp-2">
-                          {lesson.title}
-                        </h2>
-                        <p className="text-slate-500 text-xs sm:text-sm line-clamp-3 leading-relaxed mb-auto italic">
-                          {lesson.summary}
-                        </p>
-                        <div className="pt-5 mt-5 border-t border-slate-50 flex items-center justify-between">
-                          <div className="flex items-center gap-2">
-                            <span className="text-[9px] font-black text-slate-300 uppercase tracking-widest">Grd {lesson.grade_min}-{lesson.grade_max}</span>
-                            {lesson.videos && lesson.videos.length > 0 && (
-                              <div className="flex items-center gap-1 bg-blue-50 text-[#003882] px-2 py-0.5 rounded-full text-[8px] font-black uppercase">
-                                <Video size={10} /> Video
+                {/* Cards Container */}
+                <div className="relative w-full h-full flex items-center justify-center transform-style-3d">
+                  {filteredLessons.map((lesson, index) => {
+                    // Calculate distance from active
+                    const offset = index - activeIndex;
+                    const isActive = offset === 0;
+                    
+                    // Limit rendering to visible range for performance
+                    if (Math.abs(offset) > 2) return null;
+
+                    const thumb = getVideoThumbnail(lesson.videos);
+                    const catIcon = categories.find(c => c.name === lesson.category)?.icon || <Video size={32} />;
+
+                    return (
+                      <div
+                        key={lesson.id}
+                        onClick={() => isActive ? handleViewLesson(lesson.id) : (offset < 0 ? handlePrev() : handleNext())}
+                        className={`
+                          absolute w-[300px] sm:w-[380px] md:w-[420px] aspect-[3/4] bg-white rounded-[40px] shadow-2xl border-4 border-white transition-all duration-500 ease-out cursor-pointer overflow-hidden flex flex-col
+                          ${isActive ? 'z-30 cursor-pointer ring-8 ring-[#EF4E92]/20' : 'z-10 grayscale-[0.5] hover:grayscale-0 opacity-80'}
+                        `}
+                        style={{
+                          transform: `
+                            translateX(${offset * 110}%) 
+                            scale(${1 - Math.abs(offset) * 0.15}) 
+                            rotateY(${offset * -25}deg)
+                            translateZ(${Math.abs(offset) * -100}px)
+                          `,
+                          opacity: Math.abs(offset) > 2 ? 0 : (isActive ? 1 : 0.6),
+                          boxShadow: isActive ? '0 25px 50px -12px rgba(0, 0, 0, 0.25)' : 'none'
+                        }}
+                      >
+                         {/* Card Header Image */}
+                         <div className="h-[55%] bg-slate-100 relative overflow-hidden">
+                            {thumb ? (
+                              <img src={thumb} alt="" className="w-full h-full object-cover" />
+                            ) : (
+                              <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-[#003882] to-[#EF4E92]/20 text-[#003882]/20">
+                                {React.cloneElement(catIcon as React.ReactElement<any>, { size: 80, strokeWidth: 1 })}
                               </div>
                             )}
-                          </div>
-                          <ChevronRight className="text-slate-200 group-hover:text-[#EF4E92] group-hover:translate-x-1 transition-all" size={20} />
-                        </div>
+                            <div className="absolute top-4 left-4 bg-white/90 backdrop-blur px-3 py-1 rounded-full text-[8px] font-black uppercase tracking-widest text-[#003882] shadow-sm">
+                              {lesson.category}
+                            </div>
+                            {/* Play Overlay */}
+                            <div className={`absolute inset-0 bg-black/20 flex items-center justify-center transition-opacity duration-300 ${isActive ? 'opacity-100' : 'opacity-0'}`}>
+                               <div className="w-16 h-16 bg-white/30 backdrop-blur-md rounded-full flex items-center justify-center text-white border border-white/50 shadow-lg">
+                                 <Play fill="currentColor" size={28} className="ml-1" />
+                               </div>
+                            </div>
+                         </div>
+
+                         {/* Card Body */}
+                         <div className="flex-1 p-6 md:p-8 flex flex-col bg-white relative">
+                            <h2 className="text-xl md:text-2xl font-black text-[#003882] leading-none mb-3 line-clamp-2 uppercase tracking-tight">
+                              {lesson.title}
+                            </h2>
+                            <p className="text-slate-500 text-xs md:text-sm font-medium leading-relaxed line-clamp-3 mb-auto">
+                              {lesson.summary}
+                            </p>
+                            
+                            <div className="pt-4 mt-4 border-t border-slate-50 flex items-center justify-between">
+                               <span className="text-[10px] font-black text-slate-300 uppercase tracking-widest">
+                                 Grade {lesson.grade_min}-{lesson.grade_max}
+                               </span>
+                               <button className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${isActive ? 'bg-[#EF4E92] text-white' : 'bg-slate-100 text-slate-400'}`}>
+                                 <ChevronRight size={16} strokeWidth={3} />
+                               </button>
+                            </div>
+                         </div>
                       </div>
-                    </div>
-                  );
-                })
-              )}
-              {!loading && filteredLessons.length === 0 && (
-                <div className="col-span-full h-80 flex flex-col items-center justify-center bg-white/50 rounded-[48px] border-2 border-dashed border-slate-200 p-6 text-center">
-                  <p className="font-black uppercase tracking-widest text-slate-400 text-[10px]">No lessons found in this mission sector.</p>
+                    );
+                  })}
                 </div>
-              )}
-            </div>
+                
+                {/* Pagination Dots */}
+                <div className="absolute -bottom-12 flex gap-2">
+                  {filteredLessons.map((_, i) => (
+                    <div 
+                      key={i}
+                      className={`h-1.5 rounded-full transition-all duration-300 ${i === activeIndex ? 'w-8 bg-[#EF4E92]' : 'w-1.5 bg-slate-300'}`}
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
+            
+            {/* Mission Counter */}
+            {!loading && (
+              <div className="absolute bottom-6 right-6 text-[10px] font-black text-slate-300 uppercase tracking-widest">
+                 Mission {activeIndex + 1} / {filteredLessons.length}
+              </div>
+            )}
           </div>
         ) : (
           /* --- SELECTED LESSON VIEW --- */
-          <div className="max-w-4xl mx-auto px-5 sm:px-6 py-10 sm:py-20 animate-in fade-in slide-in-from-bottom-6 duration-700">
+          <div className="flex-1 overflow-y-auto bg-[#F4F7FA]">
+            <div className="max-w-4xl mx-auto px-5 sm:px-6 py-10 sm:py-20 animate-in fade-in slide-in-from-bottom-6 duration-700">
             {/* Floating Navigation Map */}
             {lessonStructure && (
               <div className="fixed bottom-6 right-6 z-[70] flex flex-col items-end gap-3 pointer-events-none">
@@ -522,6 +645,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
                 ))}
               </div>
             </section>
+            </div>
           </div>
         )}
       </main>
