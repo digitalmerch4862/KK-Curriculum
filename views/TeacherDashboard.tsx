@@ -1,10 +1,10 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { db } from '../services/supabaseService.ts';
-import { Lesson, UserRole, Profile, LessonContentStructure, LessonVideo, Attachment, LessonSchedule } from '../types.ts';
+import { Lesson, UserRole, Profile, LessonContentStructure, LessonVideo, Attachment } from '../types.ts';
 import { 
   X, ArrowLeft, ChevronRight, Menu, Download, FileText, Play, Eye, Search, BookOpen, GraduationCap, Users, CheckCircle2,
-  LayoutGrid, Book, History, Music, ScrollText, Cross, Send, Globe, LogOut, Video, AlertCircle
+  LayoutGrid, Book, History, Music, ScrollText, Cross, Send, Globe, LogOut, Video
 } from 'lucide-react';
 import TTSController from '../components/TTSController.tsx';
 
@@ -14,11 +14,14 @@ interface TeacherDashboardProps {
 }
 
 const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) => {
-  const [scheduledLesson, setScheduledLesson] = useState<Lesson | null>(null);
+  const [lessons, setLessons] = useState<Lesson[]>([]);
   const [selectedLesson, setSelectedLesson] = useState<Lesson | null>(null);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [categoryFilter, setCategoryFilter] = useState('ALL MISSIONS');
   const [loading, setLoading] = useState(true);
   
   const [isNavExpanded, setIsNavExpanded] = useState(false);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [activeVideo, setActiveVideo] = useState<LessonVideo | null>(null);
   const [viewingResource, setViewingResource] = useState<Attachment | null>(null);
 
@@ -27,65 +30,24 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
   const [isTTSPlaying, setIsTTSPlaying] = useState(false);
 
   useEffect(() => {
-    fetchDailyMission();
+    fetchLessons();
   }, []);
 
-  /**
-   * Determine the effective date based on the 1 AM Europe/London reset rule.
-   */
-  const getLondonEffectiveDate = () => {
-    const now = new Date();
-    
-    // Get London time components
-    const formatter = new Intl.DateTimeFormat('en-GB', {
-      timeZone: 'Europe/London',
-      hour: 'numeric',
-      hour12: false,
-      year: 'numeric',
-      month: 'numeric',
-      day: 'numeric'
-    });
-    const parts = formatter.formatToParts(now);
-    const findPart = (type: string) => parts.find(p => p.type === type)?.value;
-    
-    const hour = parseInt(findPart('hour') || '0', 10);
-    const year = findPart('year');
-    const month = findPart('month')?.padStart(2, '0');
-    const day = findPart('day')?.padStart(2, '0');
-    
-    // We treat hours < 1 as "yesterday"
-    const londonBaseDate = new Date(`${year}-${month}-${day}T00:00:00Z`); // Using UTC as a buffer to avoid local interference
-    
-    if (hour < 1) {
-      londonBaseDate.setUTCDate(londonBaseDate.getUTCDate() - 1);
-    }
-    
-    const y = londonBaseDate.getUTCFullYear();
-    const m = (londonBaseDate.getUTCMonth() + 1).toString().padStart(2, '0');
-    const d = londonBaseDate.getUTCDate().toString().padStart(2, '0');
-    return `${y}-${m}-${d}`;
-  };
-
-  const fetchDailyMission = async () => {
+  const fetchLessons = async () => {
     setLoading(true);
     try {
-      const dateStr = getLondonEffectiveDate();
-      const schedule = await db.schedules.getForDate(dateStr);
-      if (schedule && schedule.lesson) {
-        setScheduledLesson(schedule.lesson);
-      } else {
-        setScheduledLesson(null);
-      }
+      const data = await db.lessons.list(UserRole.TEACHER);
+      setLessons(data);
     } catch (e) { 
-      console.error("Error fetching daily mission", e); 
+      console.error("Error fetching data", e); 
     } finally { 
       setLoading(false); 
     }
   };
 
-  const getLessonThumbnail = (lesson: Lesson) => {
-    if (!lesson.videos || lesson.videos.length === 0) return null;
-    const url = lesson.videos[0].url;
+  const getVideoThumbnail = (videos?: LessonVideo[]) => {
+    if (!videos || videos.length === 0) return null;
+    const url = videos[0].url;
     try {
       const urlObj = new URL(url);
       if (urlObj.hostname.includes('youtube.com') || urlObj.hostname.includes('youtu.be')) {
@@ -106,6 +68,8 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
     try {
       const full = await db.lessons.get(id);
       setSelectedLesson(full);
+      setIsNavExpanded(false);
+      setIsMobileMenuOpen(false);
       window.scrollTo({ top: 0, behavior: 'smooth' });
     } catch (e) { 
       alert("Error loading lesson details."); 
@@ -145,25 +109,56 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
     return newStructure;
   };
 
+  const getDriveFileId = (url: string) => {
+    if (!url) return null;
+    const match = url.match(/\/d\/([^\/]+)/) || url.match(/id=([^&]+)/);
+    return match ? match[1] : null;
+  };
+
   const getViewableUrl = (url: string) => {
     if (!url) return '';
-    if (url.includes('drive.google.com')) {
-      const match = url.match(/\/d\/([^\/]+)/) || url.match(/id=([^&]+)/);
-      const fileId = match ? match[1] : null;
-      if (fileId) return `https://drive.google.com/file/d/${fileId}/preview`;
+    const fileId = getDriveFileId(url);
+    if (fileId && url.includes('drive.google.com')) {
+      return `https://drive.google.com/file/d/${fileId}/preview`;
     }
     return url;
   };
 
-  const handleDownload = (e: React.MouseEvent, url: string) => {
+  const getDownloadUrl = (url: string) => {
+    if (!url) return '';
+    const fileId = getDriveFileId(url);
+    if (fileId && url.includes('drive.google.com')) {
+      return `https://drive.google.com/uc?export=download&id=${fileId}`;
+    }
+    return url;
+  };
+
+  const handleDownload = (e: React.MouseEvent, url: string, filename: string) => {
     e.stopPropagation();
-    window.open(url, '_blank');
+    const downloadUrl = getDownloadUrl(url);
+    window.open(downloadUrl, '_blank');
   };
 
   const handlePreviewOpen = (e: React.MouseEvent, att: Attachment) => {
     e.stopPropagation();
     setViewingResource(att);
   };
+
+  const filteredLessons = lessons.filter(l => 
+    l.title.toLowerCase().includes(searchTerm.toLowerCase()) && 
+    (categoryFilter === 'ALL MISSIONS' || l.category === categoryFilter)
+  );
+
+  const categories = [
+    { name: 'ALL MISSIONS', icon: <LayoutGrid size={18} /> },
+    { name: 'PENTATEUCH', icon: <Book size={18} /> },
+    { name: 'HISTORY', icon: <History size={18} /> },
+    { name: 'POETRY', icon: <Music size={18} /> },
+    { name: 'THE PROPHETS', icon: <ScrollText size={18} /> },
+    { name: 'THE GOSPELS', icon: <Cross size={18} /> },
+    { name: 'ACTS & EPISTLES', icon: <Send size={18} /> },
+    { name: 'REVELATION', icon: <Globe size={18} /> }
+  ];
 
   const lessonStructure = selectedLesson ? parseMarkdownToStructure(selectedLesson.content || '') : null;
 
@@ -177,7 +172,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
   }, [lessonStructure]);
 
   return (
-    <div className="min-h-screen bg-[#F4F7FA] text-slate-900 font-sans selection:bg-pink-100 flex flex-col overflow-x-hidden">
+    <div className="min-h-screen bg-[#F4F7FA] text-slate-900 font-sans selection:bg-pink-100 flex flex-col md:flex-row overflow-x-hidden">
       
       {/* --- VIDEOKE CONTROL --- */}
       {selectedLesson && (
@@ -200,7 +195,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
               <div className="flex items-center gap-2 sm:gap-3 shrink-0">
                 <button 
                   type="button"
-                  onClick={(e) => handleDownload(e, viewingResource.storage_path)} 
+                  onClick={(e) => handleDownload(e, viewingResource.storage_path, viewingResource.name)} 
                   className="bg-[#003882] text-white p-2.5 sm:px-6 sm:py-3 rounded-xl sm:rounded-full text-[10px] font-black uppercase tracking-widest flex items-center gap-2 hover:bg-[#002b66] active:scale-95 transition-all shadow-lg"
                 >
                   <Download size={16} /> <span className="hidden sm:inline">Download</span>
@@ -226,97 +221,164 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
         </div>
       )}
 
-      {/* --- HEADER --- */}
-      <header className="bg-white border-b border-slate-100 px-6 py-4 flex items-center justify-between sticky top-0 z-50 shadow-sm">
-        <div className="flex items-center gap-3">
-          <div className="bg-[#EF4E92] w-10 h-10 rounded-xl flex items-center justify-center font-black text-white shadow-lg">K</div>
-          <span className="font-black text-xl tracking-tighter text-[#003882] uppercase">Mission Command</span>
-        </div>
-        <button onClick={onLogout} className="text-[10px] font-black uppercase text-slate-400 hover:text-red-500 tracking-widest flex items-center gap-2 px-4 py-2 rounded-xl hover:bg-red-50 transition-all">
-          <LogOut size={16} /> LOGOUT
-        </button>
-      </header>
+      {/* --- SIDEBAR NAVIGATION --- */}
+      {!selectedLesson && (
+        <>
+          {/* Mobile Backdrop */}
+          {isMobileMenuOpen && (
+            <div 
+              className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-40 md:hidden animate-in fade-in duration-300" 
+              onClick={() => setIsMobileMenuOpen(false)}
+            />
+          )}
 
-      {/* --- MAIN CONTENT AREA --- */}
-      <main className="flex-1 p-5 sm:p-8 md:p-12">
-        {!selectedLesson ? (
-          <div className="max-w-5xl mx-auto animate-in fade-in duration-700">
-            <div className="mb-12">
-              <h1 className="text-3xl sm:text-4xl md:text-5xl font-black text-[#003882] tracking-tighter uppercase mb-2">
-                Today's Mission
-              </h1>
-              <p className="text-slate-400 font-medium text-sm sm:text-base">Ready for deployment. The mission briefing resets daily at 01:00 AM (London Time).</p>
+          <aside className={`
+            fixed md:relative w-[280px] md:w-72 bg-white border-r border-slate-200 flex flex-col h-full md:h-screen overflow-y-auto z-50 transition-transform duration-300 ease-in-out
+            ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}
+          `}>
+            <div className="p-8 border-b border-slate-100 mb-6 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="bg-[#EF4E92] w-10 h-10 rounded-xl flex items-center justify-center font-black text-white shadow-lg">K</div>
+                <span className="font-black text-xl tracking-tighter text-[#003882] uppercase">Mission Control</span>
+              </div>
+              <button onClick={() => setIsMobileMenuOpen(false)} className="md:hidden p-2 text-slate-300 hover:text-slate-600 transition-colors">
+                <X size={20} />
+              </button>
             </div>
 
-            {loading ? (
-              <div className="h-80 flex items-center justify-center">
-                <div className="w-10 h-10 border-4 border-[#EF4E92] border-t-transparent rounded-full animate-spin"></div>
-              </div>
-            ) : scheduledLesson ? (
-              <div 
-                onClick={() => handleViewLesson(scheduledLesson.id)}
-                className="group bg-white rounded-[48px] border border-slate-50 shadow-sm hover:shadow-2xl hover:scale-[1.01] transition-all cursor-pointer flex flex-col md:flex-row overflow-hidden min-h-[400px]"
-              >
-                {/* Visual Section */}
-                <div className="w-full md:w-1/2 h-64 md:h-auto relative bg-slate-100">
-                  {getLessonThumbnail(scheduledLesson) ? (
-                    <img 
-                      src={getLessonThumbnail(scheduledLesson)!} 
-                      alt={scheduledLesson.title} 
-                      className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" 
-                    />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-[#003882] to-[#EF4E92]/20">
-                      <BookOpen size={64} className="text-white/20" />
-                    </div>
-                  )}
-                  <div className="absolute inset-0 bg-gradient-to-t from-slate-900/40 to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                    <div className="w-16 h-16 bg-white/20 backdrop-blur-md rounded-full flex items-center justify-center text-white">
-                      <Play fill="currentColor" size={24} />
-                    </div>
-                  </div>
-                </div>
+            <nav className="flex-1 px-4 space-y-1">
+              {categories.map((cat) => (
+                <button
+                  key={cat.name}
+                  onClick={() => {
+                    setCategoryFilter(cat.name);
+                    setIsMobileMenuOpen(false);
+                  }}
+                  className={`w-full flex items-center gap-4 px-5 py-4 rounded-2xl transition-all font-black text-[11px] uppercase tracking-widest ${
+                    categoryFilter === cat.name 
+                    ? 'bg-[#003882] text-white shadow-xl shadow-blue-100' 
+                    : 'text-slate-400 hover:bg-slate-50 hover:text-slate-600'
+                  }`}
+                >
+                  <span className={categoryFilter === cat.name ? 'text-[#EF4E92]' : 'text-slate-300'}>{cat.icon}</span>
+                  {cat.name}
+                </button>
+              ))}
+            </nav>
 
-                {/* Content Section */}
-                <div className="w-full md:w-1/2 p-10 md:p-14 flex flex-col justify-center">
-                  <span className="bg-[#EF4E92] text-white px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest shadow-lg inline-block w-fit mb-6">
-                    {scheduledLesson.category}
-                  </span>
-                  <h2 className="text-3xl md:text-5xl font-black text-[#003882] mb-6 group-hover:text-[#EF4E92] leading-none tracking-tighter transition-colors">
-                    {scheduledLesson.title}
-                  </h2>
-                  <p className="text-slate-500 text-lg leading-relaxed mb-8 italic">
-                    {scheduledLesson.summary}
-                  </p>
-                  <div className="pt-8 border-t border-slate-50 flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="flex flex-col">
-                        <span className="text-[10px] font-black text-slate-300 uppercase tracking-widest leading-none mb-1">Target Grades</span>
-                        <span className="text-lg font-black text-[#003882]">{scheduledLesson.grade_min} - {scheduledLesson.grade_max}</span>
+            <div className="p-8 border-t border-slate-100 mt-6">
+              <button onClick={onLogout} className="w-full text-[10px] font-black uppercase text-slate-400 hover:text-red-500 tracking-widest flex items-center gap-3 py-3 px-5 rounded-2xl hover:bg-red-50 transition-all">
+                <LogOut size={16} /> LOGOUT
+              </button>
+            </div>
+          </aside>
+        </>
+      )}
+
+      {/* --- MAIN CONTENT AREA --- */}
+      <main className="flex-1 min-w-0 h-full overflow-y-auto">
+        {!selectedLesson ? (
+          <div className="p-5 sm:p-8 md:p-12 animate-in fade-in duration-700">
+            {/* Mobile Header Toggle */}
+            <div className="md:hidden flex items-center justify-between mb-8">
+              <div className="flex items-center gap-3">
+                <div className="bg-[#EF4E92] w-8 h-8 rounded-lg flex items-center justify-center font-black text-white text-xs">K</div>
+                <span className="font-black text-[#003882] uppercase text-sm tracking-tighter">Mission Control</span>
+              </div>
+              <button 
+                onClick={() => setIsMobileMenuOpen(true)} 
+                className="p-2.5 bg-white rounded-xl shadow-sm border border-slate-100 active:scale-95 transition-transform"
+              >
+                <Menu size={20} />
+              </button>
+            </div>
+
+            <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-6 mb-12">
+              <div>
+                <h1 className="text-3xl sm:text-4xl md:text-5xl font-black text-[#003882] tracking-tighter uppercase mb-2">
+                  {categoryFilter}
+                </h1>
+                <p className="text-slate-400 font-medium text-sm sm:text-base">Equip yourself with biblical truth for the next generation.</p>
+              </div>
+              <div className="relative w-full xl:w-80">
+                <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300" size={18} />
+                <input 
+                  type="text" 
+                  placeholder="Find a mission..." 
+                  className="w-full pl-12 pr-6 py-4 bg-white border border-slate-100 rounded-2xl text-sm outline-none focus:ring-2 focus:ring-[#EF4E92] transition-all shadow-sm"
+                  value={searchTerm}
+                  onChange={e => setSearchTerm(e.target.value)}
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 gap-6 sm:gap-8">
+              {loading ? (
+                Array(6).fill(0).map((_, i) => <div key={i} className="bg-white/50 h-80 rounded-[48px] animate-pulse"></div>)
+              ) : (
+                filteredLessons.map(lesson => {
+                  const thumb = getVideoThumbnail(lesson.videos);
+                  const catIcon = categories.find(c => c.name === lesson.category)?.icon || <Video size={32} />;
+
+                  return (
+                    <div 
+                      key={lesson.id} 
+                      onClick={() => handleViewLesson(lesson.id)} 
+                      className="group bg-white rounded-[40px] border border-slate-50 shadow-sm hover:shadow-2xl hover:scale-[1.02] transition-all cursor-pointer flex flex-col overflow-hidden min-h-[420px] sm:min-h-[460px]"
+                    >
+                      {/* Thumbnail Stage */}
+                      <div className="h-44 sm:h-52 md:h-56 relative overflow-hidden bg-slate-100">
+                        {thumb ? (
+                          <img 
+                            src={thumb} 
+                            alt={lesson.title} 
+                            className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" 
+                          />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-[#003882] to-[#EF4E92]/20 text-white/20">
+                            {React.cloneElement(catIcon as React.ReactElement<any>, { size: 64, strokeWidth: 1 })}
+                          </div>
+                        )}
+                        <div className="absolute inset-0 bg-gradient-to-t from-slate-900/60 to-transparent opacity-0 sm:group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                          <div className="w-14 h-14 sm:w-16 sm:h-16 bg-white/20 backdrop-blur-md rounded-full flex items-center justify-center text-white">
+                            <Play fill="currentColor" size={24} />
+                          </div>
+                        </div>
+                        <span className="absolute top-4 left-4 bg-[#EF4E92] text-white px-3 py-1 rounded-full text-[8px] font-black uppercase tracking-widest shadow-lg">
+                          {lesson.category}
+                        </span>
+                      </div>
+
+                      {/* Info Stage */}
+                      <div className="p-6 sm:p-8 flex flex-col flex-1">
+                        <h2 className="text-lg sm:text-xl font-black text-[#003882] mb-3 group-hover:text-[#EF4E92] leading-tight line-clamp-2">
+                          {lesson.title}
+                        </h2>
+                        <p className="text-slate-500 text-xs sm:text-sm line-clamp-3 leading-relaxed mb-auto italic">
+                          {lesson.summary}
+                        </p>
+                        <div className="pt-5 mt-5 border-t border-slate-50 flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <span className="text-[9px] font-black text-slate-300 uppercase tracking-widest">Grd {lesson.grade_min}-{lesson.grade_max}</span>
+                            {lesson.videos && lesson.videos.length > 0 && (
+                              <div className="flex items-center gap-1 bg-blue-50 text-[#003882] px-2 py-0.5 rounded-full text-[8px] font-black uppercase">
+                                <Video size={10} /> Video
+                              </div>
+                            )}
+                          </div>
+                          <ChevronRight className="text-slate-200 group-hover:text-[#EF4E92] group-hover:translate-x-1 transition-all" size={20} />
+                        </div>
                       </div>
                     </div>
-                    <div className="bg-[#003882] text-white p-4 rounded-3xl group-hover:bg-[#EF4E92] transition-colors shadow-lg">
-                      <ChevronRight size={24} strokeWidth={3} />
-                    </div>
-                  </div>
+                  );
+                })
+              )}
+              {!loading && filteredLessons.length === 0 && (
+                <div className="col-span-full h-80 flex flex-col items-center justify-center bg-white/50 rounded-[48px] border-2 border-dashed border-slate-200 p-6 text-center">
+                  <p className="font-black uppercase tracking-widest text-slate-400 text-[10px]">No lessons found in this mission sector.</p>
                 </div>
-              </div>
-            ) : (
-              <div className="bg-white rounded-[48px] p-16 md:p-24 border-2 border-dashed border-slate-200 text-center flex flex-col items-center gap-6">
-                <div className="w-20 h-20 bg-pink-50 rounded-full flex items-center justify-center text-[#EF4E92]">
-                  <AlertCircle size={40} />
-                </div>
-                <div className="max-w-md">
-                  <h3 className="text-2xl font-black text-[#003882] uppercase tracking-tight mb-2">No Mission Assigned</h3>
-                  <p className="text-slate-400 font-medium mb-8 leading-relaxed">There is no lesson assigned for your command on this date sector.</p>
-                  <div className="bg-pink-50 border border-pink-100 rounded-[32px] p-8">
-                    <p className="text-[#EF4E92] font-black uppercase text-[11px] tracking-widest leading-relaxed">
-                      Notice: No lesson scheduled. Please contact your admin to set the lesson.
-                    </p>
-                  </div>
-                </div>
-              </div>
-            )}
+              )}
+            </div>
           </div>
         ) : (
           /* --- SELECTED LESSON VIEW --- */
@@ -424,7 +486,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
             </section>
 
             {/* Resources HUB */}
-            <section id="resource-hub" className="mt-24 sm:mt-40 scroll-mt-24 pb-40">
+            <section id="resource-hub" className="mt-24 sm:mt-40 scroll-mt-24 pb-40 sm:pb-80">
               <div className="flex items-center gap-3 mb-8 sm:mb-12">
                 <div className="h-8 sm:h-10 w-1.5 sm:w-2 bg-[#003882] rounded-full"></div>
                 <h3 className="text-2xl sm:text-3xl font-black text-[#003882] uppercase tracking-tighter">Resources</h3>
@@ -449,7 +511,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
                       </button>
                       <button 
                         type="button"
-                        onClick={(e) => handleDownload(e, att.storage_path)} 
+                        onClick={(e) => handleDownload(e, att.storage_path, att.name)} 
                         className="p-3 sm:p-4 bg-blue-50 text-[#003882] rounded-xl sm:rounded-2xl sm:hover:bg-blue-100 transition-all active:scale-90 border border-blue-100 shadow-sm cursor-pointer"
                         title="Download File"
                       >
