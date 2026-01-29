@@ -210,7 +210,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
 
   // Sorting & Search
   const [searchQuery, setSearchQuery] = useState('');
-  const [sortOrder, setSortOrder] = useState<'updated' | 'alpha_asc' | 'alpha_desc'>('updated');
+  // Changed default sort to 'alpha_asc'
+  const [sortOrder, setSortOrder] = useState<'updated' | 'alpha_asc' | 'alpha_desc'>('alpha_asc');
   const [isSortMenuOpen, setIsSortMenuOpen] = useState(false);
 
   useEffect(() => {
@@ -527,15 +528,33 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
         </div>
       )}
 
-      <header className="sticky top-0 z-50 bg-white border-b border-gray-100 px-6 md:px-10 py-4 md:py-5 flex items-center justify-between shadow-sm">
-        <div className="flex items-center gap-4">
+      <header className="sticky top-0 z-50 bg-white border-b border-gray-100 px-6 md:px-10 py-4 md:py-5 flex items-center justify-between shadow-sm gap-4">
+        <div className="flex items-center gap-4 shrink-0">
           <div className="bg-[#EF4E92] w-9 h-9 md:w-11 md:h-11 rounded-xl flex items-center justify-center font-black text-white shadow-lg shadow-pink-200">K</div>
           <div>
             <h1 className="text-xs md:text-sm font-black tracking-tight text-gray-900 uppercase">KingdomKids Admin</h1>
             <p className="hidden md:block text-[10px] text-gray-400 font-bold tracking-widest uppercase">FAITH PATHWAY</p>
           </div>
         </div>
-        <button onClick={onLogout} className="text-[10px] md:text-xs font-black uppercase text-[#EF4E92] tracking-widest hover:text-[#EF4E92]/80 transition-colors">Log out</button>
+
+        {/* CENTER: Mission Name Input */}
+        <div className="flex-1 flex justify-center min-w-0">
+           {editingId ? (
+             <input 
+               type="text" 
+               placeholder="ENTER MISSION NAME..." 
+               className="w-full max-w-2xl bg-transparent border-b-2 border-transparent hover:border-gray-100 focus:border-[#EF4E92] outline-none text-center text-sm md:text-xl font-black text-[#003882] uppercase tracking-tight placeholder:text-gray-200 transition-all pb-1"
+               value={formData.title}
+               onChange={e => setFormData({...formData, title: e.target.value})}
+             />
+           ) : (
+             <div className="hidden md:block text-[10px] font-black uppercase tracking-[0.3em] text-gray-200 select-none">
+               Mission Control
+             </div>
+           )}
+        </div>
+
+        <button onClick={onLogout} className="shrink-0 text-[10px] md:text-xs font-black uppercase text-[#EF4E92] tracking-widest hover:text-[#EF4E92]/80 transition-colors">Log out</button>
       </header>
 
       <div className="max-w-[1600px] mx-auto p-6 md:p-8 grid grid-cols-1 lg:grid-cols-12 gap-6 md:gap-10">
@@ -637,8 +656,10 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
           ) : (
             <div className="space-y-10 animate-in fade-in slide-in-from-bottom-6 duration-700 pb-20">
               <div className="bg-white/95 backdrop-blur-md p-3 md:p-4 rounded-full border border-gray-100 shadow-xl flex flex-wrap items-center justify-between sticky top-[92px] z-40 gap-3">
-                <h2 className="font-black text-md md:text-xl px-4 text-[#003882] truncate max-w-[200px]">{formData.title || 'Draft Lesson'}</h2>
-                <div className="flex items-center gap-2">
+                <div className="px-4 text-[10px] font-black text-gray-300 uppercase tracking-widest hidden md:block">
+                   ACTION MENU
+                </div>
+                <div className="flex items-center gap-2 ml-auto">
                   <button onClick={() => setEditingId(null)} className="px-4 py-2 text-[10px] font-black uppercase text-gray-400 hover:text-black tracking-widest">DISCARD</button>
                   <button onClick={() => setIsAiModalOpen(true)} className="px-5 py-3 bg-[#EF4E92] rounded-full text-[10px] font-black uppercase tracking-widest text-white shadow-lg hover:scale-[1.02] transition-transform">AI ARCHITECT</button>
                   <button onClick={() => handleSave(LessonStatus.DRAFT)} className="px-6 py-3 bg-[#003882] rounded-full text-[10px] font-black uppercase tracking-widest text-white shadow-lg transition-transform hover:scale-[1.02]">DRAFT</button>
@@ -647,11 +668,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                <div className="space-y-3">
-                  <SectionHeader title="Mission Name" />
-                  <input placeholder="Mission Name..." className="w-full bg-white border border-gray-100 rounded-[28px] px-6 py-5 font-black text-xl text-gray-800 outline-none shadow-sm focus:border-pink-300 transition-all" value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})} />
-                </div>
-                <div className="space-y-3">
+                <div className="space-y-3 md:col-span-2">
                   <SectionHeader title="Classification" />
                   <div className="flex items-center gap-3">
                     <div className="relative flex-1">

@@ -21,8 +21,10 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
   const [loading, setLoading] = useState(true);
   
   // Sorting State
-  const [sortOrder, setSortOrder] = useState<'newest' | 'alpha_asc' | 'alpha_desc'>('newest');
+  const [sortOrder, setSortOrder] = useState<'newest' | 'alpha_asc' | 'alpha_desc'>('alpha_asc');
   const [isSortMenuOpen, setIsSortMenuOpen] = useState(false);
+  const [showMobileSearch, setShowMobileSearch] = useState(false);
+  const [isCategoryMenuOpen, setIsCategoryMenuOpen] = useState(false);
 
   // Carousel State
   const [activeIndex, setActiveIndex] = useState(0);
@@ -71,9 +73,9 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
     // Apply Sorting
     result.sort((a, b) => {
       if (sortOrder === 'alpha_asc') {
-        return a.title.localeCompare(b.title);
+        return (a.title || '').localeCompare(b.title || '');
       } else if (sortOrder === 'alpha_desc') {
-        return b.title.localeCompare(a.title);
+        return (b.title || '').localeCompare(a.title || '');
       } else {
         // Default: Newest first (using updated_at or published_at)
         const dateA = new Date(a.updated_at || 0).getTime();
@@ -272,20 +274,79 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
         </div>
       )}
 
-      {/* --- FLOATING HEADER (Replaces Sidebar) --- */}
+      {/* --- FLOATING HEADER --- */}
       {!selectedLesson && (
-        <header className="fixed top-0 left-0 right-0 z-50 px-6 py-4 flex items-center justify-between pointer-events-none">
-          {/* Brand */}
-          <div className="bg-white/90 backdrop-blur-md px-5 py-3 rounded-full shadow-lg border border-slate-100 pointer-events-auto flex items-center gap-3">
-             <div className="bg-[#EF4E92] w-8 h-8 rounded-full flex items-center justify-center font-black text-white text-xs shadow-md">K</div>
-             <div>
-               <h1 className="text-sm font-black text-[#003882] uppercase tracking-tighter leading-none">Kingdom Kids</h1>
-               <p className="text-[9px] text-slate-400 font-bold tracking-widest uppercase">Mission Control</p>
+        <header className="fixed top-0 left-0 right-0 z-50 px-4 py-4 md:px-6 md:py-4 flex items-center justify-between pointer-events-none">
+          
+          {/* LEFT SECTION (Mobile: Sort, Search | Desktop: Brand, Sort, Search Button hidden) */}
+          <div className="flex items-center gap-2 pointer-events-auto z-50">
+             
+             {/* Desktop Brand (Hidden on Mobile) */}
+             <div className="hidden md:flex bg-white/90 backdrop-blur-md px-5 py-3 rounded-full shadow-lg border border-slate-100 items-center gap-3 mr-4">
+                 <div className="bg-[#EF4E92] w-8 h-8 rounded-full flex items-center justify-center font-black text-white text-xs shadow-md">K</div>
+                 <div>
+                   <h1 className="text-sm font-black text-[#003882] uppercase tracking-tighter leading-none">Kingdom Kids</h1>
+                   <p className="text-[9px] text-slate-400 font-bold tracking-widest uppercase">Mission Control</p>
+                 </div>
              </div>
+
+             {/* Sort Button (Mobile: Left | Desktop: Left of Search) */}
+             <div className="relative">
+               <button 
+                 onClick={() => setIsSortMenuOpen(!isSortMenuOpen)}
+                 className="bg-white/90 backdrop-blur-md p-3 rounded-full shadow-lg border border-slate-100 hover:bg-slate-50 text-slate-400 hover:text-[#EF4E92] transition-colors"
+               >
+                 <ArrowUpDown size={18} />
+               </button>
+               {isSortMenuOpen && (
+                 <div className="absolute top-full left-0 mt-2 w-48 bg-white/95 backdrop-blur-xl rounded-2xl shadow-2xl border border-slate-100 p-2 flex flex-col gap-1 z-[60] animate-in fade-in zoom-in-95 duration-200 origin-top-left">
+                    <button 
+                      onClick={() => { setSortOrder('alpha_asc'); setIsSortMenuOpen(false); }}
+                      className={`px-4 py-3 text-left text-[10px] font-black uppercase tracking-widest rounded-xl transition-all flex items-center justify-between ${sortOrder === 'alpha_asc' ? 'bg-pink-50 text-[#EF4E92]' : 'text-slate-400 hover:bg-slate-50'}`}
+                    >
+                      <span>Title (A-Z)</span>
+                      {sortOrder === 'alpha_asc' && <Check size={12} />}
+                    </button>
+                    <button 
+                      onClick={() => { setSortOrder('alpha_desc'); setIsSortMenuOpen(false); }}
+                      className={`px-4 py-3 text-left text-[10px] font-black uppercase tracking-widest rounded-xl transition-all flex items-center justify-between ${sortOrder === 'alpha_desc' ? 'bg-pink-50 text-[#EF4E92]' : 'text-slate-400 hover:bg-slate-50'}`}
+                    >
+                      <span>Title (Z-A)</span>
+                      {sortOrder === 'alpha_desc' && <Check size={12} />}
+                    </button>
+                    <button 
+                      onClick={() => { setSortOrder('newest'); setIsSortMenuOpen(false); }}
+                      className={`px-4 py-3 text-left text-[10px] font-black uppercase tracking-widest rounded-xl transition-all flex items-center justify-between ${sortOrder === 'newest' ? 'bg-pink-50 text-[#EF4E92]' : 'text-slate-400 hover:bg-slate-50'}`}
+                    >
+                      <span>Newest First</span>
+                      {sortOrder === 'newest' && <Check size={12} />}
+                    </button>
+                 </div>
+               )}
+             </div>
+
+             {/* Mobile Search Toggle */}
+             <button 
+               className="md:hidden bg-white/90 backdrop-blur-md p-3 rounded-full shadow-lg border border-slate-100 hover:bg-slate-50 text-slate-400 hover:text-[#EF4E92] transition-colors"
+               onClick={() => setShowMobileSearch(!showMobileSearch)}
+             >
+                <Search size={18} />
+             </button>
           </div>
 
-          {/* Navigation Pills */}
-          <div className="hidden md:flex bg-white/90 backdrop-blur-md px-2 py-2 rounded-full shadow-lg border border-slate-100 pointer-events-auto items-center gap-1 max-w-2xl overflow-x-auto scrollbar-hide">
+          {/* CENTER SECTION (Mobile Brand) */}
+          <div className="absolute left-1/2 top-4 -translate-x-1/2 pointer-events-auto md:hidden z-40">
+              <div className="bg-white/90 backdrop-blur-md px-4 py-2.5 rounded-full shadow-lg border border-slate-100 flex items-center gap-2">
+                 <div className="bg-[#EF4E92] w-6 h-6 rounded-full flex items-center justify-center font-black text-white text-[10px] shadow-md">K</div>
+                 <div className="flex flex-col">
+                   <h1 className="text-xs font-black text-[#003882] uppercase tracking-tighter leading-none">Kingdom Kids</h1>
+                   <p className="text-[7px] text-slate-400 font-bold tracking-widest uppercase leading-none">Mission Control</p>
+                 </div>
+              </div>
+          </div>
+
+          {/* CENTER SECTION (Desktop Categories) */}
+          <div className="hidden md:flex bg-white/90 backdrop-blur-md px-2 py-2 rounded-full shadow-lg border border-slate-100 pointer-events-auto items-center gap-1 max-w-xl overflow-x-auto scrollbar-hide absolute left-1/2 -translate-x-1/2 top-4">
             {categories.map((cat) => (
               <button
                 key={cat.name}
@@ -302,45 +363,36 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
             ))}
           </div>
 
-          {/* Utilities */}
-          <div className="flex items-center gap-3 pointer-events-auto">
-             {/* Sort Dropdown */}
-             <div className="relative">
+          {/* RIGHT SECTION */}
+          <div className="flex items-center gap-3 pointer-events-auto z-50">
+             
+             {/* NEW: Mobile Category Filter Button */}
+             <div className="relative md:hidden">
                <button 
-                 onClick={() => setIsSortMenuOpen(!isSortMenuOpen)}
-                 className="bg-white/90 backdrop-blur-md p-3 rounded-full shadow-lg border border-slate-100 hover:bg-slate-50 text-slate-400 hover:text-[#EF4E92] transition-colors"
-                 title="Sort Missions"
+                 onClick={() => setIsCategoryMenuOpen(!isCategoryMenuOpen)}
+                 className={`bg-white/90 backdrop-blur-md p-3 rounded-full shadow-lg border border-slate-100 transition-colors ${categoryFilter !== 'ALL MISSIONS' ? 'text-[#EF4E92] bg-pink-50' : 'text-slate-400 hover:bg-slate-50'}`}
                >
-                 <ArrowUpDown size={18} />
+                 {categories.find(c => c.name === categoryFilter)?.icon || <LayoutGrid size={18} />}
                </button>
-               {isSortMenuOpen && (
-                 <div className="absolute top-full right-0 mt-2 w-48 bg-white/95 backdrop-blur-xl rounded-2xl shadow-2xl border border-slate-100 p-2 flex flex-col gap-1 z-[60] animate-in fade-in zoom-in-95 duration-200">
-                    <button 
-                      onClick={() => { setSortOrder('newest'); setIsSortMenuOpen(false); }}
-                      className={`px-4 py-3 text-left text-[10px] font-black uppercase tracking-widest rounded-xl transition-all flex items-center justify-between ${sortOrder === 'newest' ? 'bg-pink-50 text-[#EF4E92]' : 'text-slate-400 hover:bg-slate-50'}`}
-                    >
-                      <span>Newest First</span>
-                      {sortOrder === 'newest' && <Check size={12} />}
-                    </button>
-                    <button 
-                      onClick={() => { setSortOrder('alpha_asc'); setIsSortMenuOpen(false); }}
-                      className={`px-4 py-3 text-left text-[10px] font-black uppercase tracking-widest rounded-xl transition-all flex items-center justify-between ${sortOrder === 'alpha_asc' ? 'bg-pink-50 text-[#EF4E92]' : 'text-slate-400 hover:bg-slate-50'}`}
-                    >
-                      <span>Title (A-Z)</span>
-                      {sortOrder === 'alpha_asc' && <Check size={12} />}
-                    </button>
-                    <button 
-                      onClick={() => { setSortOrder('alpha_desc'); setIsSortMenuOpen(false); }}
-                      className={`px-4 py-3 text-left text-[10px] font-black uppercase tracking-widest rounded-xl transition-all flex items-center justify-between ${sortOrder === 'alpha_desc' ? 'bg-pink-50 text-[#EF4E92]' : 'text-slate-400 hover:bg-slate-50'}`}
-                    >
-                      <span>Title (Z-A)</span>
-                      {sortOrder === 'alpha_desc' && <Check size={12} />}
-                    </button>
+               {isCategoryMenuOpen && (
+                 <div className="absolute top-full right-0 mt-2 w-64 bg-white/95 backdrop-blur-xl rounded-2xl shadow-2xl border border-slate-100 p-2 flex flex-col gap-1 z-[60] animate-in fade-in zoom-in-95 duration-200 origin-top-right max-h-[60vh] overflow-y-auto">
+                    {categories.map((cat) => (
+                      <button 
+                        key={cat.name}
+                        onClick={() => { setCategoryFilter(cat.name); setIsCategoryMenuOpen(false); }}
+                        className={`px-4 py-3 text-left text-[10px] font-black uppercase tracking-widest rounded-xl transition-all flex items-center gap-3 ${categoryFilter === cat.name ? 'bg-pink-50 text-[#EF4E92]' : 'text-slate-400 hover:bg-slate-50'}`}
+                      >
+                        <span className={categoryFilter === cat.name ? 'text-[#EF4E92]' : 'text-slate-300'}>{cat.icon}</span>
+                        <span className="truncate">{cat.name}</span>
+                        {categoryFilter === cat.name && <Check size={14} className="ml-auto text-[#EF4E92]" />}
+                      </button>
+                    ))}
                  </div>
                )}
              </div>
 
-             <div className="hidden sm:flex bg-white/90 backdrop-blur-md px-4 py-2.5 rounded-full shadow-lg border border-slate-100 items-center gap-2 w-48 transition-all focus-within:w-64 focus-within:ring-2 ring-[#EF4E92]">
+             {/* Desktop Search */}
+             <div className="hidden md:flex bg-white/90 backdrop-blur-md px-4 py-2.5 rounded-full shadow-lg border border-slate-100 items-center gap-2 w-48 transition-all focus-within:w-64 focus-within:ring-2 ring-[#EF4E92]">
                 <Search size={14} className="text-slate-400" />
                 <input 
                   type="text" 
@@ -350,11 +402,33 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
                   onChange={e => setSearchTerm(e.target.value)}
                 />
              </div>
+
+             {/* Logout */}
              <button onClick={onLogout} className="bg-white/90 backdrop-blur-md p-3 rounded-full shadow-lg border border-slate-100 hover:bg-red-50 hover:text-red-500 text-slate-400 transition-colors">
                <LogOut size={18} />
              </button>
           </div>
         </header>
+      )}
+
+      {/* Mobile Search Bar Overlay */}
+      {showMobileSearch && !selectedLesson && (
+        <div className="fixed top-20 left-6 right-6 z-40 animate-in slide-in-from-top-4 duration-200 md:hidden">
+          <div className="bg-white/95 backdrop-blur-xl p-2 rounded-2xl shadow-2xl border border-slate-100 flex items-center gap-2">
+            <Search size={18} className="text-[#EF4E92] ml-3" />
+            <input 
+               autoFocus
+               type="text" 
+               placeholder="SEARCH MISSIONS..."
+               className="bg-transparent border-none outline-none text-sm font-bold text-slate-700 w-full placeholder:text-slate-300 uppercase tracking-wider h-10"
+               value={searchTerm}
+               onChange={e => setSearchTerm(e.target.value)}
+            />
+            <button onClick={() => { setSearchTerm(''); setShowMobileSearch(false); }} className="p-2 text-slate-400">
+              <X size={18} />
+            </button>
+          </div>
+        </div>
       )}
 
       {/* --- MAIN CONTENT AREA --- */}
@@ -365,17 +439,6 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
             <div className="absolute inset-0 overflow-hidden pointer-events-none opacity-30">
               <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-[#EF4E92] rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-blob"></div>
               <div className="absolute top-1/3 right-1/4 w-96 h-96 bg-[#003882] rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-blob animation-delay-2000"></div>
-            </div>
-
-            {/* Mobile Category Select (Visible only on small screens) */}
-            <div className="md:hidden absolute top-24 left-0 right-0 px-6 z-30">
-              <select 
-                className="w-full bg-white/80 backdrop-blur border border-white shadow-lg rounded-2xl p-4 text-xs font-black text-[#003882] uppercase outline-none"
-                value={categoryFilter}
-                onChange={(e) => setCategoryFilter(e.target.value)}
-              >
-                {categories.map(c => <option key={c.name} value={c.name}>{c.name}</option>)}
-              </select>
             </div>
 
             {/* 3D CAROUSEL STAGE */}
