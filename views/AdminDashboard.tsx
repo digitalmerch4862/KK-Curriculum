@@ -1,8 +1,9 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { db } from '../services/supabaseService.ts';
 import { categorizeLessonTitle, generateFullLesson, generateLessonSummary } from '../services/geminiService.ts';
 import { Lesson, LessonStatus, UserRole, Profile, LessonActivity, LessonVideo, Attachment, LessonContentStructure, LessonSubSection } from '../types.ts';
+import { Search, ArrowUpDown, Check } from 'lucide-react';
 
 // Core labels that are permanent and non-deletable
 const PERMANENT_TITLES = [
@@ -201,14 +202,52 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
   const [isSummarizing, setIsSummarizing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // AI Modal
   const [isAiModalOpen, setIsAiModalOpen] = useState(false);
   const [aiStep, setAiStep] = useState<'questions' | 'preview'>('questions');
   const [aiGoal, setAiGoal] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
 
+  // Sorting & Search
+  const [searchQuery, setSearchQuery] = useState('');
+  const [sortOrder, setSortOrder] = useState<'updated' | 'alpha_asc' | 'alpha_desc'>('updated');
+  const [isSortMenuOpen, setIsSortMenuOpen] = useState(false);
+
   useEffect(() => {
     fetchLessons();
   }, []);
+
+  const filteredLessons = useMemo(() => {
+    let result = [...lessons];
+    
+    // Search
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      result = result.filter(l => 
+        l.title.toLowerCase().includes(q) || 
+        (l.summary && l.summary.toLowerCase().includes(q)) ||
+        l.category.toLowerCase().includes(q)
+      );
+    }
+
+    // Sort
+    result.sort((a, b) => {
+      if (sortOrder === 'updated') {
+        const dateA = new Date(a.updated_at || 0).getTime();
+        const dateB = new Date(b.updated_at || 0).getTime();
+        return dateB - dateA; // Descending
+      }
+      if (sortOrder === 'alpha_asc') {
+        return (a.title || '').localeCompare(b.title || '');
+      }
+      if (sortOrder === 'alpha_desc') {
+        return (b.title || '').localeCompare(a.title || '');
+      }
+      return 0;
+    });
+
+    return result;
+  }, [lessons, searchQuery, sortOrder]);
 
   const parseMarkdownToStructure = (md: string) => {
     const newStructure: LessonContentStructure = { read: [], teach: [], engage: [] };
@@ -372,7 +411,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
       const existingContext = lessons.map(l => l.title).join(', ');
       const result = await generateFullLesson(aiGoal, existingContext);
       if (result) {
-        // Mapping AI response to the fixed KingdomKids layout
         const newGenStructure: LessonContentStructure = {
           read: [
             { id: Math.random().toString(36).substr(2, 9), title: 'BIBLE TEXT', content: result.scripture },
@@ -506,8 +544,54 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
             <h2 className="font-black text-2xl md:text-3xl tracking-tighter text-[#003882]">Lessons</h2>
             <button onClick={handleNew} className="bg-[#EF4E92] text-white px-5 py-2.5 rounded-full text-[9px] md:text-[10px] font-black uppercase tracking-widest shadow-xl hover:bg-[#EF4E92]/90 transition-all">+ NEW</button>
           </div>
-          <div className="space-y-4 overflow-y-auto lg:max-h-[calc(100vh-220px)] pr-2 scrollbar-hide">
-            {lessons.map(l => (
+
+          {/* SEARCH AND SORT BAR */}
+          <div className="flex gap-2 relative z-30">
+            <div className="relative flex-1">
+               <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-300" size={14} />
+               <input 
+                 className="w-full bg-white border border-gray-100 rounded-xl pl-9 pr-3 py-3 text-[10px] font-black uppercase tracking-widest text-gray-600 outline-none focus:border-[#EF4E92] transition-all"
+                 placeholder="SEARCH..."
+                 value={searchQuery}
+                 onChange={e => setSearchQuery(e.target.value)}
+               />
+            </div>
+            <button 
+              onClick={() => setIsSortMenuOpen(!isSortMenuOpen)}
+              className="bg-white border border-gray-100 rounded-xl px-3 flex items-center justify-center text-gray-400 hover:text-[#EF4E92] hover:border-pink-100 transition-all"
+            >
+              <ArrowUpDown size={16} />
+            </button>
+
+            {isSortMenuOpen && (
+              <div className="absolute top-full right-0 mt-2 w-48 bg-white rounded-2xl shadow-xl border border-gray-100 p-2 flex flex-col gap-1">
+                <button 
+                  onClick={() => { setSortOrder('updated'); setIsSortMenuOpen(false); }}
+                  className={`px-4 py-2 text-left text-[10px] font-black uppercase tracking-widest rounded-xl transition-all flex items-center justify-between ${sortOrder === 'updated' ? 'bg-pink-50 text-[#EF4E92]' : 'text-gray-400 hover:bg-gray-50'}`}
+                >
+                  <span>Recently Updated</span>
+                  {sortOrder === 'updated' && <Check size={12} />}
+                </button>
+                <button 
+                  onClick={() => { setSortOrder('alpha_asc'); setIsSortMenuOpen(false); }}
+                  className={`px-4 py-2 text-left text-[10px] font-black uppercase tracking-widest rounded-xl transition-all flex items-center justify-between ${sortOrder === 'alpha_asc' ? 'bg-pink-50 text-[#EF4E92]' : 'text-gray-400 hover:bg-gray-50'}`}
+                >
+                  <span>Title (A-Z)</span>
+                  {sortOrder === 'alpha_asc' && <Check size={12} />}
+                </button>
+                 <button 
+                  onClick={() => { setSortOrder('alpha_desc'); setIsSortMenuOpen(false); }}
+                  className={`px-4 py-2 text-left text-[10px] font-black uppercase tracking-widest rounded-xl transition-all flex items-center justify-between ${sortOrder === 'alpha_desc' ? 'bg-pink-50 text-[#EF4E92]' : 'text-gray-400 hover:bg-gray-50'}`}
+                >
+                  <span>Title (Z-A)</span>
+                  {sortOrder === 'alpha_desc' && <Check size={12} />}
+                </button>
+              </div>
+            )}
+          </div>
+
+          <div className="space-y-4 overflow-y-auto lg:max-h-[calc(100vh-280px)] pr-2 scrollbar-hide">
+            {filteredLessons.map(l => (
               <div 
                 key={l.id} 
                 onClick={() => handleEdit(l.id)} 
