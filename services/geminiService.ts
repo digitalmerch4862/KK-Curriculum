@@ -2,125 +2,66 @@ import { GoogleGenAI, Modality, Type } from "@google/genai";
 
 /**
  * Initialize Gemini AI Client.
- * Note: process.env.API_KEY is automatically injected by the environment.
+ * Using import.meta.env for Vite/Vercel compatibility.
  */
 const getAIClient = () => {
-  const apiKey = process.env.API_KEY;
+  // Use VITE_ prefix for client-side environment variables
+  const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
+  
   if (!apiKey) {
-    console.warn("Warning: API_KEY is not defined. AI features will be unavailable.");
+    console.warn("⚠️ API_KEY is not defined in environment variables. AI features will fail.");
   }
-  return new GoogleGenAI({ apiKey: apiKey || '' });
+  // The SDK usually expects the key as a direct string argument
+  return new GoogleGenAI(apiKey || '');
 };
 
 /**
  * Generates a full lesson structure using Gemini AI.
- * Uses gemini-3-flash-preview for speed and efficiency.
- * Persona: Faith Pathway AI Lesson Architect.
  */
 export const generateFullLesson = async (goal: string, context: string) => {
   const ai = getAIClient();
-  const response = await ai.models.generateContent({
+  const model = ai.getGenerativeModel({ 
     model: "gemini-3-flash-preview",
-    config: {
-      systemInstruction: `You are the "Faith Pathway AI Lesson Architect," an expert Sunday School Curriculum Creator. 
-      Your goal is to generate engaging, age-appropriate Christian lessons for kids (ages 5-11).
-      You must ALWAYS respond in valid JSON format so the app can render the content.
-
-      Lesson Structure:
-      1. title: A catchy name for the lesson.
-      2. scripture: The primary Bible verse (include the version, e.g., NIV).
-      3. objective: One sentence on what the kids will learn.
-      4. the_hook: A 2-minute opening activity or story to grab attention.
-      5. the_lesson: An array of 3 clear, simple points for the teacher to explain.
-      6. group_activity: A hands-on game or craft related to the theme.
-      7. closing_prayer: A short, 2-sentence prayer.
-
-      Constraints:
-      - Use simple language suitable for ages 5-11.
-      - DO NOT include any conversational text outside of the JSON block.
-      - Ensure all JSON keys are lowercase and use underscores (e.g., "closing_prayer").`,
-      responseMimeType: "application/json",
-      responseSchema: {
-        type: Type.OBJECT,
-        properties: {
-          title: { type: Type.STRING },
-          scripture: { type: Type.STRING },
-          objective: { type: Type.STRING },
-          the_hook: { type: Type.STRING },
-          the_lesson: {
-            type: Type.ARRAY,
-            items: { type: Type.STRING },
-            description: "An array of 3 clear teaching points"
-          },
-          group_activity: { type: Type.STRING },
-          closing_prayer: { type: Type.STRING }
-        },
-        required: ["title", "scripture", "objective", "the_hook", "the_lesson", "group_activity", "closing_prayer"]
-      }
-    },
-    contents: `Create a Sunday School lesson based on this objective: "${goal}". Existing context: ${context}.`,
+    systemInstruction: `You are the "Faith Pathway AI Lesson Architect," an expert Sunday School Curriculum Creator...`, // Keep your full instructions here
   });
 
-  const text = response.text;
+  const result = await model.generateContent({
+    contents: [{ role: 'user', parts: [{ text: `Create a Sunday School lesson based on this objective: "${goal}". Existing context: ${context}.` }] }],
+    generationConfig: {
+      responseMimeType: "application/json",
+    }
+  });
+
+  const response = await result.response;
+  const text = response.text(); // text() is a function, not a property
   if (!text) throw new Error("No response text received from Gemini");
   return JSON.parse(text);
 };
 
 /**
- * Categorizes a lesson title into predefined biblical categories.
+ * Categorizes a lesson title.
  */
 export const categorizeLessonTitle = async (title: string) => {
   const ai = getAIClient();
-  const response = await ai.models.generateContent({
-    model: "gemini-3-flash-preview",
-    contents: `Categorize this Bible lesson title: "${title}". 
+  const model = ai.getGenerativeModel({ model: "gemini-3-flash-preview" });
+  const result = await model.generateContent(`Categorize this Bible lesson title: "${title}". 
       Options: PENTATEUCH, HISTORY, POETRY, THE PROPHETS, THE GOSPELS, ACTS & EPISTLES, REVELATION.
-      Return ONLY the category name.`,
-  });
-  return response.text?.trim() || 'HISTORY';
+      Return ONLY the category name.`);
+  
+  const response = await result.response;
+  return response.text()?.trim() || 'HISTORY';
 };
 
 /**
- * Generates a short summary for the mission dashboard.
- * Takes the title and content to provide a high-quality summary even if content is sparse.
+ * Generates a short summary.
  */
 export const generateLessonSummary = async (title: string, content: string) => {
   const ai = getAIClient();
-  const response = await ai.models.generateContent({
-    model: "gemini-3-flash-preview",
-    contents: `You are the Faith Pathway AI Architect. Based on the lesson title "${title}" and the following lesson content:
-    
-    "${content}"
-    
-    Summarize this lesson into 2 short, engaging, and professional sentences for a teacher's briefing. 
-    Do NOT include meta-talk like "Since you didn't provide details..." or "Here is a summary...". 
-    Just provide the 2-sentence summary itself.`,
-  });
-  return response.text?.trim() || '';
-};
-
-/**
- * Generates base64 PCM audio data for lesson narration using TTS model.
- */
-export const generateTTS = async (text: string, voiceName: string = 'Kore') => {
-  const ai = getAIClient();
-  // Normalize voice name to Title Case as expected by the API
-  const formattedVoice = voiceName.charAt(0).toUpperCase() + voiceName.slice(1).toLowerCase();
+  const model = ai.getGenerativeModel({ model: "gemini-3-flash-preview" });
+  const result = await model.generateContent(`You are the Faith Pathway AI Architect. Based on the lesson title "${title}" and the following content: "${content}"...`);
   
-  const response = await ai.models.generateContent({
-    model: "gemini-2.5-flash-preview-tts",
-    contents: [{ parts: [{ text }] }],
-    config: {
-      responseModalities: [Modality.AUDIO],
-      speechConfig: {
-        voiceConfig: {
-          prebuiltVoiceConfig: { voiceName: formattedVoice },
-        },
-      },
-    },
-  });
-
-  // Extract base64 from candidates
-  const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
-  return base64Audio;
+  const response = await result.response;
+  return response.text()?.trim() || '';
 };
+
+// ... keep your generateTTS function logic, but ensure it uses response.text() or modality checks
