@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { db } from '../services/supabaseService.ts';
-import { categorizeLessonTitle, generateFullLesson, generateLessonSummary } from '../services/geminiService.ts';
+import { categorizeLessonTitle, generateLessonSummary } from '../services/geminiService.ts';
 import { Lesson, LessonStatus, UserRole, Profile, LessonActivity, LessonVideo, Attachment, LessonContentStructure, LessonSubSection } from '../types.ts';
 import { Search, ArrowUpDown, Check } from 'lucide-react';
 
@@ -175,7 +175,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
   const [lessons, setLessons] = useState<Lesson[]>([]);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [formData, setFormData] = useState<Partial<Lesson>>({
-    title: '', summary: '', content: '', category: 'HISTORY', series: '', grade_min: 1, grade_max: 5, tags: [], status: LessonStatus.DRAFT
+    title: '', summary: '', content: '', category: 'HISTORY', series: '', grade_min: 1, grade_max: 5, tags: [], status: LessonStatus.DRAFT, announcement: ''
   });
  
   const [structure, setStructure] = useState<LessonContentStructure>({
@@ -201,12 +201,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
   const [isCategorizing, setIsCategorizing] = useState(false);
   const [isSummarizing, setIsSummarizing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  // AI Modal
-  const [isAiModalOpen, setIsAiModalOpen] = useState(false);
-  const [aiStep, setAiStep] = useState<'questions' | 'preview'>('questions');
-  const [aiGoal, setAiGoal] = useState('');
-  const [isGenerating, setIsGenerating] = useState(false);
 
   // Sorting & Search
   const [searchQuery, setSearchQuery] = useState('');
@@ -345,7 +339,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
   const handleNew = () => {
     setEditingId('new');
     setFormData({
-      title: '', summary: '', content: '', category: 'HISTORY', series: '', grade_min: 1, grade_max: 5, tags: [], status: LessonStatus.DRAFT
+      title: '', summary: '', content: '', category: 'HISTORY', series: '', grade_min: 1, grade_max: 5, tags: [], status: LessonStatus.DRAFT, announcement: ''
     });
    
     const freshTemplate: LessonContentStructure = {
@@ -358,8 +352,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
     setActivities([]);
     setVideos([]);
     setAttachments([]);
-    setAiGoal('');
-    setAiStep('questions');
     setError(null);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
@@ -401,45 +393,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
       alert("Save Failed: " + e.message);
     } finally {
       setLoading(false);
-    }
-  };
-
-  const handleAiGenerate = async () => {
-    if (!aiGoal.trim()) return alert("Please describe your lesson objective.");
-    setIsGenerating(true);
-    try {
-      const existingContext = lessons.map(l => l.title).join(', ');
-      const result = await generateFullLesson(aiGoal, existingContext);
-      if (result) {
-        const newGenStructure: LessonContentStructure = {
-          read: [
-            { id: Math.random().toString(36).substr(2, 9), title: 'BIBLE TEXT', content: result.scripture },
-            { id: Math.random().toString(36).substr(2, 9), title: 'MEMORY VERSE', content: '' }
-          ],
-          teach: [
-            { id: Math.random().toString(36).substr(2, 9), title: 'BIG PICTURE', content: result.objective },
-            { id: Math.random().toString(36).substr(2, 9), title: 'TEACH THE STORY', content: result.the_lesson.join('\n\n') },
-            { id: Math.random().toString(36).substr(2, 9), title: 'GOSPEL CONNECTION', content: result.closing_prayer }
-          ],
-          engage: [
-            { id: Math.random().toString(36).substr(2, 9), title: 'DISCUSSION', content: result.the_hook },
-            { id: Math.random().toString(36).substr(2, 9), title: 'CRAFTS', content: result.group_activity }
-          ],
-        };
-
-        setFormData(prev => ({ 
-          ...prev, 
-          title: result.title, 
-          summary: `${result.objective} Base Scripture: ${result.scripture}`
-        }));
-        setStructure(newGenStructure);
-        setAiStep('preview');
-      }
-    } catch (e) {
-      console.error("AI Generation failed", e);
-      alert("AI Generation failed. Please try again.");
-    } finally {
-      setIsGenerating(false);
     }
   };
 
@@ -495,38 +448,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
 
   return (
     <div className="min-h-screen bg-[#F8FAFC]">
-      {/* AI GENERATOR MODAL */}
-      {isAiModalOpen && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-black/60 backdrop-blur-sm animate-in fade-in duration-300">
-          <div className="bg-white w-full h-auto max-w-2xl rounded-[48px] p-8 md:p-12 shadow-2xl space-y-8 relative overflow-hidden">
-            <button onClick={() => setIsAiModalOpen(false)} className="absolute top-8 right-10 text-gray-300 hover:text-black">
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M6 18L18 6M6 6l12 12" /></svg>
-            </button>
-            <div className="space-y-2">
-              <h2 className="text-3xl font-black text-[#003882] tracking-tighter uppercase">AI Lesson Architect</h2>
-              <p className="text-gray-400 font-medium">{aiStep === 'questions' ? 'Define your objective.' : 'Review generated draft.'}</p>
-            </div>
-            {aiStep === 'questions' ? (
-              <div className="space-y-6">
-                <textarea rows={6} className="w-full bg-[#F8FAFC] border-2 border-transparent focus:border-[#EF4E92] rounded-[32px] px-8 py-7 outline-none transition-all font-medium resize-none text-gray-800 leading-relaxed" placeholder="Tell the Architect what you want to teach today..." value={aiGoal} onChange={e => setAiGoal(e.target.value)} />
-                <button onClick={handleAiGenerate} disabled={isGenerating} className="w-full bg-[#EF4E92] text-white rounded-full py-5 font-black uppercase tracking-widest shadow-lg hover:bg-[#EF4E92]/90 transition-all flex items-center justify-center gap-3 disabled:opacity-50">
-                  {isGenerating ? 'Architecting...' : 'Start Building'}
-                </button>
-              </div>
-            ) : (
-              <div className="space-y-8">
-                <div className="bg-gray-50 rounded-[32px] p-6 border border-gray-100 max-h-[30vh] overflow-y-auto">
-                  <h4 className="font-black text-indigo-900 mb-2 uppercase text-[10px] tracking-[0.2em]">Live Preview</h4>
-                  <p className="font-black text-lg text-gray-800">{formData.title}</p>
-                  <p className="text-sm text-gray-400 mt-2 italic">{formData.summary}</p>
-                </div>
-                <button onClick={() => setIsAiModalOpen(false)} className="w-full bg-[#EF4E92] text-white rounded-full py-5 font-black uppercase tracking-widest shadow-lg hover:bg-[#EF4E92]/90 transition-all">Use Selected</button>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
       <header className="sticky top-0 z-50 bg-white border-b border-gray-100 px-6 md:px-10 py-4 md:py-5 flex items-center justify-between shadow-sm">
         <div className="flex items-center gap-4">
           <div className="bg-[#EF4E92] w-9 h-9 md:w-11 md:h-11 rounded-xl flex items-center justify-center font-black text-white shadow-lg shadow-pink-200">K</div>
@@ -640,7 +561,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
                 <h2 className="font-black text-md md:text-xl px-4 text-[#003882] truncate max-w-[200px]">{formData.title || 'Draft Lesson'}</h2>
                 <div className="flex items-center gap-2">
                   <button onClick={() => setEditingId(null)} className="px-4 py-2 text-[10px] font-black uppercase text-gray-400 hover:text-black tracking-widest">DISCARD</button>
-                  <button onClick={() => setIsAiModalOpen(true)} className="px-5 py-3 bg-[#EF4E92] rounded-full text-[10px] font-black uppercase tracking-widest text-white shadow-lg hover:scale-[1.02] transition-transform">AI ARCHITECT</button>
                   <button onClick={() => handleSave(LessonStatus.DRAFT)} className="px-6 py-3 bg-[#003882] rounded-full text-[10px] font-black uppercase tracking-widest text-white shadow-lg transition-transform hover:scale-[1.02]">DRAFT</button>
                   <button onClick={() => handleSave(LessonStatus.PUBLISHED)} className="px-8 py-3 bg-[#EF4E92] rounded-full text-[10px] font-black uppercase tracking-widest text-white shadow-lg transition-transform hover:scale-[1.02]">PUBLISH</button>
                 </div>
@@ -705,6 +625,20 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
                     )}
                   </button>
                 </div>
+              </div>
+
+              {/* ANNOUNCEMENT BLOCK */}
+              <div className="space-y-3">
+                 <div className="flex items-center gap-3 mb-4 md:mb-6">
+                    <div className="h-5 md:h-6 w-1 md:w-1.5 bg-amber-400 rounded-full"></div>
+                    <h3 className="font-black text-lg md:text-xl tracking-tight uppercase text-amber-600">Teacher Announcements</h3>
+                 </div>
+                 <textarea
+                   placeholder="Important notices for teachers (e.g. 'Rain plan in effect', 'Supplies in closet')..."
+                   className="w-full bg-amber-50 border border-amber-100 rounded-[32px] px-8 py-6 font-medium text-sm text-amber-900 outline-none shadow-sm focus:border-amber-300 transition-all resize-none min-h-[100px] leading-relaxed"
+                   value={formData.announcement || ''}
+                   onChange={e => setFormData({...formData, announcement: e.target.value})}
+                 />
               </div>
 
               <div className="space-y-6">
